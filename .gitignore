@@ -1,0 +1,26 @@
+# --- Dependências e builds (regeneráveis pelo build-offline-bundle.sh) ---
+node_modules/
+backend/dist/
+frontend/dist/
+
+# --- Bundles offline e cache de download (nunca versionar) ---
+offline-builds/
+
+# --- Segredos (gerados na instalação, nunca commitados) ---
+.env
+*.env
+!*.env.example
+backend/.env
+
+# --- Dados reais de funcionários (LGPD) — nunca versionar ---
+database/*real*.sql
+database/dados-reais*.sql
+database/*.dump
+
+# --- Backups de banco ---
+backup-*.sql
+backup-*.sql.gz
+
+# --- Diversos ---
+*.log
+.DS_Store
