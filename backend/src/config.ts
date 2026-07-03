@@ -31,7 +31,6 @@ export const config = {
   jwtSecret: required('JWT_SECRET'),
   // Token lifetime in seconds (default: 8 hours).
   jwtExpiresInSeconds: numberFromEnv('JWT_EXPIRES_IN', 28800),
-  bcryptCost: numberFromEnv('BCRYPT_COST', 12),
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: numberFromEnv('DB_PORT', 5432),

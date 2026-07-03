@@ -13,7 +13,7 @@ export interface Announcement {
   title: string;
   body: string;
   author: string | null;
-  created_at: string;
+  createdAt: string;
 }
 
 export function getToken(): string | null {

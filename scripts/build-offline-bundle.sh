@@ -107,8 +107,11 @@ download_debs() {
   log "apt-get update ..."
   sudo apt-get update
   log "Baixando .deb + dependencias transitivas ..."
+  # APT::Sandbox::User=root: o pool fica sob o HOME do usuario, que o usuario
+  # _apt nao acessa; sem isto o apt emite um aviso de permissao a cada pacote.
   sudo apt-get install -y --download-only \
     -o Dir::Cache::archives="$pool" \
+    -o APT::Sandbox::User=root \
     "${DEB_PACKAGES[@]}"
 
   rm -rf "$pool/partial" "$pool/lock"
@@ -219,4 +222,6 @@ main() {
   package_bundle
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

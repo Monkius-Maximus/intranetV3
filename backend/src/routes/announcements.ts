@@ -16,7 +16,15 @@ announcementsRouter.get(
          LEFT JOIN users u ON u.id = a.created_by
         ORDER BY a.created_at DESC`,
     );
-    res.json(result.rows);
+    res.json(
+      result.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        author: row.author,
+        createdAt: row.created_at,
+      })),
+    );
   }),
 );
 
@@ -35,6 +43,12 @@ announcementsRouter.post(
       'INSERT INTO announcements (title, body, created_by) VALUES ($1, $2, $3) RETURNING id, title, body, created_at',
       [title.trim(), body.trim(), req.user!.sub],
     );
-    res.status(201).json(result.rows[0]);
+    const row = result.rows[0];
+    res.status(201).json({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      createdAt: row.created_at,
+    });
   }),
 );

@@ -63,6 +63,8 @@ preflight() {
       || die "Diretorio do bundle ausente: $d/ (rode a partir do bundle extraido)."
   done
   [[ -d "$DEPS_DIR/debs" ]] || die "deps/debs/ ausente no bundle."
+  compgen -G "$DEPS_DIR/debs/*.deb" >/dev/null || die "Nenhum .deb em deps/debs/ (bundle incompleto)."
+  compgen -G "$DEPS_DIR/node-v*-linux-x64.tar.xz" >/dev/null || die "Tarball do Node ausente em deps/ (bundle incompleto)."
   ok "Pre-condicoes atendidas (Ubuntu 24.04 amd64, root, bundle completo)."
 }
 
@@ -178,9 +180,10 @@ set_admin_password() {
   CURRENT_STEP="set_admin_password"
   [[ "$IS_REINSTALL" == "0" ]] || return 0
   log "Definindo senha do admin (bcrypt)..."
+  # Usa o proprio util do app (dist/auth.js) — mesma logica que o login verifica.
   local hash
   hash="$("$NODE_DIR/bin/node" \
-    -e 'const b=require("/opt/intranet/backend/node_modules/bcryptjs");process.stdout.write(b.hashSync(process.argv[1],12));' \
+    -e 'const {hashPassword}=require("/opt/intranet/backend/dist/auth.js");process.stdout.write(hashPassword(process.argv[1],12));' \
     "$ADMIN_PASSWORD")"
   # Lido via stdin (não -c): só assim o psql interpola :'hash', que cita o valor
   # com segurança (o hash bcrypt contém '$').
@@ -221,7 +224,6 @@ DB_USER=$APP_DB_USER
 DB_PASSWORD=$db_pass
 JWT_SECRET=$jwt_secret
 JWT_EXPIRES_IN=28800
-BCRYPT_COST=12
 EOF
   chmod 600 "$env_file"
   chown "$SYS_USER:$SYS_USER" "$env_file"
@@ -312,4 +314,6 @@ main() {
   print_summary
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

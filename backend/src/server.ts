@@ -17,7 +17,8 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'recurso não encontrado' });
 });
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Error-handling middleware: Express identifies it by the 4-argument signature,
+// so _next must stay in the list even though it is unused.
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Erro não tratado:', err);
   res.status(500).json({ error: 'erro interno' });
