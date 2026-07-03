@@ -1,0 +1,30 @@
+Linhas para o .gitignore (já aplicadas no .gitignore deste repositório).
+Mantidas aqui como referência do PORQUÊ de cada bloco — entregável da spec.
+
+# Dependências e builds — regeneráveis pelo build-offline-bundle.sh.
+# Não fazem sentido no git e incham o histórico.
+node_modules/
+backend/dist/
+frontend/dist/
+
+# Bundles offline (~150-300 MB cada) e cache de download.
+# Artefatos de saída; nunca versionar.
+offline-builds/
+
+# Segredos. O .env real é gerado NA INSTALAÇÃO, no servidor, com senha do
+# postgres e JWT_SECRET aleatórios (modo 600). Nunca deve entrar no git.
+# A exceção é o .env.example (template sem segredos).
+.env
+*.env
+!*.env.example
+backend/.env
+
+# Dados REAIS de funcionários (LGPD). O schema.sql e o seed.sql de EXEMPLO
+# podem ser versionados; os dados reais entram só no bundle, nunca no git.
+database/*real*.sql
+database/dados-reais*.sql
+database/*.dump
+
+# Backups operacionais de banco gerados por backup-db.sh.
+backup-*.sql
+backup-*.sql.gz

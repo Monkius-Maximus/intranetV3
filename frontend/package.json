@@ -1,0 +1,20 @@
+{
+  "name": "intranet-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Intranet SEPLAG - frontend (Vite)",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0 <23.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
