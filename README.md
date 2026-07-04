@@ -1,42 +1,71 @@
 # Intranet SEPLAG
 
-Aplicação web interna (administradores e usuários comuns) projetada para rodar
-num servidor da rede corporativa **sem acesso à internet** (air-gapped), em
-**deploy nativo, sem Docker**.
+Aplicação web interna da SEPLAG: **diretório de funcionários/ramais**, comunicados
+e links úteis, com login e um administrador que gerencia as pessoas.
 
-- **Backend:** Node.js 22.23.1 + Express + TypeScript (JWT, bcrypt, PostgreSQL).
-- **Frontend:** SPA estática (Vite).
-- **Banco:** PostgreSQL 16.
-- **Servidor:** Ubuntu 24.04 LTS — nginx (porta 80) + systemd; backend só em
-  `127.0.0.1:3000`.
+Arquitetura enxuta, no mesmo formato do projeto de Sistemas Distribuídos da equipe:
+**um único servidor Express** que serve a interface web **e** a API REST, com
+**persistência local em arquivo** (JSON atômico) — sem banco de dados externo,
+sem Docker, sem build. Roda em qualquer máquina da rede; os demais PCs acessam
+pela porta aberta no firewall.
 
-## Como instalar (resumo)
+- **Servidor:** Node.js + Express 5 + TypeScript (rodando via `tsx`, sem build).
+- **Validação:** Zod. **Auth:** JWT + bcrypt (papéis `admin` e `viewer`).
+- **Dados:** `data/intranet.json` (escrita atômica). **UI:** `public/` (HTML/JS/CSS).
 
-Todo download/compilação acontece numa **máquina DEV com internet**, que gera um
-pacote único. O **servidor** apenas executa um instalador offline.
-
-```bash
-# Na DEV (WSL2 Ubuntu 24.04, com internet):
-bash scripts/build-offline-bundle.sh        # gera offline-builds/intranet-bundle-*.tar.gz
-
-# No SERVIDOR (Ubuntu 24.04, sem internet), via pendrive:
-tar xzf intranet-bundle-*.tar.gz && cd intranet-bundle-*
-sudo bash scripts/install-server.sh
-```
-
-O guia completo está em **[DEPLOY-OFFLINE.md](DEPLOY-OFFLINE.md)**. O mapa de
-arquivos está em **[INSTALACAO-NO-REPO.md](INSTALACAO-NO-REPO.md)**.
-
-## Desenvolvimento local
+## Rodar (desenvolvimento ou produção)
 
 ```bash
-# Backend
-cd backend && npm install && cp .env.example .env   # ajuste DB_* e JWT_SECRET
-npm run build && npm start
-
-# Frontend (proxy /api -> 127.0.0.1:3000 já configurado)
-cd frontend && npm install && npm run dev
+npm install
+npm start
 ```
 
-Banco local: crie o banco `intranet`/role `intranet_app` e importe
-`database/schema.sql` e `database/seed.sql`.
+Na primeira execução, um usuário **admin** é criado e a senha é **impressa uma
+vez** no console (ou defina `ADMIN_EMAIL`/`ADMIN_PASSWORD`). O servidor sobe em
+`http://0.0.0.0:3000`. Para os outros PCs da rede acessarem, **abra a porta 3000
+no firewall** da máquina — foi assim que a equipe já validou na rede corporativa.
+
+Variáveis de ambiente (todas opcionais):
+
+| Variável | Padrão | Função |
+|---|---|---|
+| `PORT` | `3000` | porta HTTP |
+| `HOST` | `0.0.0.0` | interface de bind (exposto na LAN) |
+| `ADMIN_EMAIL` | `admin@intranet.local` | e-mail do admin inicial |
+| `ADMIN_PASSWORD` | *(gerada e impressa)* | senha do admin inicial |
+| `JWT_SECRET` | *(gerado em `data/jwt-secret.key`)* | segredo dos tokens |
+| `INTRANET_DATA` | `./data` | diretório de dados |
+
+## Carregar os funcionários reais (LGPD)
+
+O SQL com dados reais **não** vai para o git. Carregue-o localmente:
+
+```bash
+npm run importar-funcionarios -- /caminho/employees_real_data_complete.sql
+```
+
+Isso lê os `INSERT INTO employees (...)` e grava em `data/intranet.json`
+(idempotente — rodar de novo troca o conjunto). Departamentos e links úteis já
+vêm no seed (`src/seed.ts`); não são dados pessoais.
+
+## Testes
+
+```bash
+npm test        # vitest + supertest (API)
+npm run typecheck
+```
+
+## Deploy
+
+Veja **[DEPLOY.md](DEPLOY.md)** — o caminho simples (instalar Node, subir o app,
+abrir a porta) e a variante air-gapped, caso a máquina realmente não tenha
+internet no setup.
+
+## Estrutura
+
+```
+src/        config, persistência (JSON atômico), store (domínio), auth, schemas, seed, app, index
+public/     interface web (login + diretório + comunicados + links)
+scripts/    importar-funcionarios.ts (carga dos dados reais)
+data/       banco JSON + segredo JWT  (NÃO versionado — LGPD)
+```

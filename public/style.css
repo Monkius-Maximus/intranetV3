@@ -1,0 +1,192 @@
+:root {
+  --brand: #0b4f9c;
+  --bg: #f4f6f9;
+  --text: #1c2733;
+  --muted: #5a6b7b;
+  --border: #d4dae2;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+button {
+  cursor: pointer;
+}
+
+/* login */
+.card {
+  max-width: 360px;
+  margin: 10vh auto;
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.card h1 {
+  margin: 0;
+  color: var(--brand);
+  font-size: 1.4rem;
+}
+.subtitle {
+  margin-top: 0.25rem;
+  color: var(--muted);
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+input,
+select {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+.card button,
+.form-inline button {
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: 4px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.95rem;
+}
+.error {
+  color: #b00020;
+  margin: 0;
+}
+
+/* app */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: var(--brand);
+  color: #fff;
+}
+.brand {
+  font-weight: 600;
+}
+.topbar button {
+  margin-left: 0.75rem;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+}
+.content {
+  max-width: 960px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+  display: grid;
+  gap: 1.5rem;
+}
+.panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+.panel h2 {
+  margin-top: 0;
+  color: var(--brand);
+  font-size: 1.1rem;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.filtros {
+  display: flex;
+  gap: 0.5rem;
+}
+.filtros #busca {
+  min-width: 240px;
+}
+.form-inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+.chk {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.contagem,
+.vazio {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.aviso {
+  border-left: 3px solid var(--brand);
+  padding: 0.25rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.aviso h3 {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+.link {
+  background: none;
+  border: none;
+  color: #b00020;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+}
+.link-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.9rem;
+  margin: 0.25rem 0.5rem 0.25rem 0;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+}
+.link-card span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}

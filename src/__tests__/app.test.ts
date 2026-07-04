@@ -1,0 +1,68 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import request from 'supertest';
+import type { Express } from 'express';
+
+let app: Express;
+
+beforeAll(async () => {
+  // Ambiente isolado: dados num tempdir, admin conhecido, segredo fixo.
+  process.env.INTRANET_DATA = mkdtempSync(join(tmpdir(), 'intranet-test-'));
+  process.env.ADMIN_EMAIL = 'admin@test.local';
+  process.env.ADMIN_PASSWORD = 'admin12345';
+  process.env.JWT_SECRET = 'segredo-de-teste';
+
+  const store = await import('../store');
+  const { seed } = await import('../seed');
+  ({ app } = await import('../app'));
+  await store.iniciar();
+  await seed();
+});
+
+async function loginAdmin(): Promise<string> {
+  const r = await request(app).post('/api/login').send({ email: 'admin@test.local', senha: 'admin12345' });
+  expect(r.status).toBe(200);
+  return r.body.token;
+}
+
+describe('Intranet SEPLAG API', () => {
+  it('health responde 200', async () => {
+    const r = await request(app).get('/api/health');
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe('ok');
+  });
+
+  it('bloqueia rota protegida sem token (401)', async () => {
+    const r = await request(app).get('/api/employees');
+    expect(r.status).toBe(401);
+  });
+
+  it('login com senha errada é 401', async () => {
+    const r = await request(app).post('/api/login').send({ email: 'admin@test.local', senha: 'errada' });
+    expect(r.status).toBe(401);
+  });
+
+  it('seed criou os departamentos', async () => {
+    const token = await loginAdmin();
+    const r = await request(app).get('/api/departments').set('Authorization', `Bearer ${token}`);
+    expect(r.status).toBe(200);
+    expect(r.body.length).toBe(9);
+  });
+
+  it('admin cria funcionário e a busca o encontra', async () => {
+    const token = await loginAdmin();
+    const criar = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Fulano de Tal', email: 'fulano@seplag.pe.gov.br', departmentCode: 'SEPO' });
+    expect(criar.status).toBe(201);
+
+    // busca acento-insensível
+    const lista = await request(app).get('/api/employees?busca=FULANO').set('Authorization', `Bearer ${token}`);
+    expect(lista.status).toBe(200);
+    expect(lista.body).toHaveLength(1);
+    expect(lista.body[0].name).toBe('Fulano de Tal');
+  });
+});

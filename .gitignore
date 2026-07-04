@@ -1,26 +1,22 @@
-# --- Dependências e builds (regeneráveis pelo build-offline-bundle.sh) ---
+# Dependências
 node_modules/
-backend/dist/
-frontend/dist/
 
-# --- Bundles offline e cache de download (nunca versionar) ---
-offline-builds/
+# Dados locais: banco JSON, segredo JWT, e QUALQUER dado real de funcionários.
+# Nada disso é versionado (LGPD). Ignora o CONTEÚDO de data/, mas mantém a pasta.
+data/*
+!data/.gitkeep
 
-# --- Segredos (gerados na instalação, nunca commitados) ---
+# SQL de dados reais (fica só na máquina; carregado via importador).
+*real*.sql
+dados-reais*.sql
+employees_real_data*.sql
+
+# Segredos e ambiente
 .env
 *.env
 !*.env.example
-backend/.env
+*.key
 
-# --- Dados reais de funcionários (LGPD) — nunca versionar ---
-database/*real*.sql
-database/dados-reais*.sql
-database/*.dump
-
-# --- Backups de banco ---
-backup-*.sql
-backup-*.sql.gz
-
-# --- Diversos ---
+# Diversos
 *.log
 .DS_Store
