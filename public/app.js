@@ -142,13 +142,13 @@ async function carregarFuncionarios() {
       <tbody>
         ${itens
           .map(
-            (e) => `<tr>
+            (e) => `<tr data-id="${e.id}">
               <td>${esc(e.name)}</td>
               <td>${esc(e.departmentFull || e.departmentCode || '')}</td>
               <td>${esc(e.phoneExtension || '')}</td>
               <td>${esc(e.email || '')}</td>
               <td>${e.birthDay && e.birthMonth ? `${e.birthDay}/${e.birthMonth}` : ''}</td>
-              ${isAdmin() ? `<td><button class="link del-func" data-id="${e.id}">remover</button></td>` : ''}
+              ${isAdmin() ? `<td class="acoes"><button class="link edit-func" data-id="${e.id}">editar</button> <button class="link del-func" data-id="${e.id}">remover</button></td>` : ''}
             </tr>`,
           )
           .join('')}
@@ -163,7 +163,64 @@ async function carregarFuncionarios() {
         await carregarFuncionarios();
       }),
     );
+    el.querySelectorAll('.edit-func').forEach((b) =>
+      b.addEventListener('click', () => {
+        const emp = itens.find((x) => x.id === Number(b.dataset.id));
+        if (emp) editarLinha(emp);
+      }),
+    );
   }
+}
+
+// Troca a linha da tabela por inputs; salvar faz PUT e recarrega a lista.
+function editarLinha(emp) {
+  const tr = document.querySelector(`#funcionarios tr[data-id="${emp.id}"]`);
+  if (!tr) return;
+  tr.innerHTML = `
+    <td><input name="name" required /></td>
+    <td><select name="departmentCode">
+      <option value="">Setor…</option>
+      ${estado.departments.map((d) => `<option value="${esc(d.code)}">${esc(d.code)}</option>`).join('')}
+    </select></td>
+    <td><input name="phoneExtension" class="curto" /></td>
+    <td><input name="email" /></td>
+    <td class="aniv"><input name="birthDay" type="number" min="1" max="31" class="curto" placeholder="Dia" />
+        <input name="birthMonth" type="number" min="1" max="12" class="curto" placeholder="Mês" /></td>
+    <td class="acoes"><button class="link salvar">salvar</button> <button class="link cancelar">cancelar</button></td>`;
+
+  // Preenche via .value (evita escapar aspas em atributos HTML).
+  tr.querySelector('[name=name]').value = emp.name;
+  tr.querySelector('[name=departmentCode]').value = emp.departmentCode || '';
+  tr.querySelector('[name=phoneExtension]').value = emp.phoneExtension || '';
+  tr.querySelector('[name=email]').value = emp.email || '';
+  tr.querySelector('[name=birthDay]').value = emp.birthDay ?? '';
+  tr.querySelector('[name=birthMonth]').value = emp.birthMonth ?? '';
+
+  tr.querySelector('.cancelar').addEventListener('click', () => carregarFuncionarios());
+  tr.querySelector('.salvar').addEventListener('click', async () => {
+    const v = (n) => tr.querySelector(`[name=${n}]`).value.trim();
+    const num = (n) => (v(n) ? Number(v(n)) : null);
+    const patch = {
+      name: v('name'),
+      email: v('email') || null,
+      phoneExtension: v('phoneExtension') || null,
+      birthDay: num('birthDay'),
+      birthMonth: num('birthMonth'),
+    };
+    // Só mexe no setor se o código mudou — preserva o detalhe (ex.:
+    // "SEPO/ORCAMENTO" em departmentFull) quando o admin edita outro campo.
+    const codigo = v('departmentCode') || null;
+    if (codigo !== (emp.departmentCode || null)) {
+      patch.departmentCode = codigo;
+      patch.departmentFull = codigo;
+    }
+    try {
+      await api(`/employees/${emp.id}`, { method: 'PUT', body: JSON.stringify(patch) });
+      await carregarFuncionarios();
+    } catch (err) {
+      alert(`Não foi possível salvar: ${err.message}`);
+    }
+  });
 }
 
 function formFuncionario() {

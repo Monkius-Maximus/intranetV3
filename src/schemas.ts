@@ -10,18 +10,37 @@ export const loginSchema = z.object({
 const dia = z.number().int().min(1).max(31).nullable();
 const mes = z.number().int().min(1).max(12).nullable();
 
+// Validadores compartilhados entre criação e atualização (fonte única).
+const emailFunc = z.string().trim().max(255).nullable();
+const ramalFunc = z.string().trim().max(20).nullable();
+const setorCodigo = z.string().trim().max(50).nullable();
+const setorDetalhe = z.string().trim().max(255).nullable();
+
+// Criação: campo ausente vira null (registro completo no store).
 export const employeeCreateSchema = z.object({
   name: textoCurto,
-  email: z.string().trim().max(255).nullable().default(null),
-  phoneExtension: z.string().trim().max(20).nullable().default(null),
-  departmentCode: z.string().trim().max(50).nullable().default(null),
-  departmentFull: z.string().trim().max(255).nullable().default(null),
+  email: emailFunc.default(null),
+  phoneExtension: ramalFunc.default(null),
+  departmentCode: setorCodigo.default(null),
+  departmentFull: setorDetalhe.default(null),
   birthDay: dia.default(null),
   birthMonth: mes.default(null),
 });
 
-// Atualização parcial: todos os campos opcionais.
-export const employeeUpdateSchema = employeeCreateSchema.partial();
+// Atualização parcial: só o que vier no corpo é alterado. Definido SEM
+// .default() — um default aqui faria todo PUT parcial apagar os campos
+// não enviados (o Zod preenche defaults mesmo com a chave ausente).
+export const employeeUpdateSchema = z
+  .object({
+    name: textoCurto,
+    email: emailFunc,
+    phoneExtension: ramalFunc,
+    departmentCode: setorCodigo,
+    departmentFull: setorDetalhe,
+    birthDay: dia,
+    birthMonth: mes,
+  })
+  .partial();
 
 export const announcementCreateSchema = z.object({
   title: textoCurto,

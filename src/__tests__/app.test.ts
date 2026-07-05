@@ -62,6 +62,30 @@ describe('Intranet SEPLAG API', () => {
     expect(r.body.length).toBe(9);
   });
 
+  it('admin edita funcionário (PUT parcial) e preserva o resto', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Beltrana Editável', phoneExtension: '1111', departmentCode: 'IGPE', departmentFull: 'IGPE/GESTAO' });
+    expect(criado.status).toBe(201);
+
+    const editado = await request(app)
+      .put(`/api/employees/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phoneExtension: '2222' });
+    expect(editado.status).toBe(200);
+    expect(editado.body.phoneExtension).toBe('2222');
+    // patch parcial não pode apagar os demais campos
+    expect(editado.body.name).toBe('Beltrana Editável');
+    expect(editado.body.departmentFull).toBe('IGPE/GESTAO');
+  });
+
+  it('PUT sem token é 401', async () => {
+    const r = await request(app).put('/api/employees/1').send({ name: 'X' });
+    expect(r.status).toBe(401);
+  });
+
   it('admin cria funcionário e a busca o encontra', async () => {
     const token = await loginAdmin();
     const criar = await request(app)

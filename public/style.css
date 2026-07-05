@@ -161,6 +161,22 @@ th {
   color: var(--muted);
   font-size: 0.85rem;
 }
+.acoes {
+  white-space: nowrap;
+}
+td input,
+td select {
+  padding: 0.3rem;
+  font-size: 0.85rem;
+  width: 100%;
+  min-width: 4rem;
+}
+td input.curto {
+  width: 4.5rem;
+}
+td.aniv {
+  white-space: nowrap;
+}
 .aviso {
   border-left: 3px solid var(--brand);
   padding: 0.25rem 0.75rem;
