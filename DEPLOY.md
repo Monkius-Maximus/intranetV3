@@ -78,7 +78,13 @@ atuais sobrevivam à restauração.)
 
 ## 4. Segurança
 
-- Acesso protegido por **login** (o diretório tem dados pessoais — LGPD).
-- Senhas com **bcrypt**; tokens **JWT** assinados com segredo aleatório.
+- **Leitura pública, escrita só admin.** O usuário comum consulta o diretório
+  sem login; só o administrador entra (senha **bcrypt**, token **JWT** com
+  segredo aleatório) para gerenciar pessoas/comunicados.
+- **Atenção LGPD:** como a leitura é aberta, qualquer um que alcance a porta na
+  LAN vê os dados de contato dos servidores. Isso é intencional (diretório
+  interno), mas exponha **só a porta do app** no firewall e mantenha o servidor
+  na rede corporativa. Se precisar de um portão, o caminho mais simples é exigir
+  um token também nos `GET` (basta recolocar o middleware `authenticate` nas
+  rotas de leitura em `src/app.ts`) e distribuir um login de leitura.
 - `data/` (banco, segredo, dados reais) **nunca** vai para o git.
-- Exponha só a porta do app no firewall; nada mais precisa estar aberto.

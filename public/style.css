@@ -63,6 +63,10 @@ select {
   color: #fff;
   font-size: 0.95rem;
 }
+.card .secundario {
+  background: #e7ecf3;
+  color: var(--brand);
+}
 .error {
   color: #b00020;
   margin: 0;

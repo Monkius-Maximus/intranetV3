@@ -68,27 +68,32 @@ app.get('/api/me', authenticate, (req: AuthedRequest, res) => {
   res.json({ id: u.id, email: u.email, role: u.role, name: u.name });
 });
 
-app.get('/api/departments', authenticate, (_req, res) => {
+// -------------------------------------------- Leitura pública (sem login)
+// O usuário comum NÃO se cadastra nem faz login: consulta o diretório, os
+// comunicados e os links direto. Só a ESCRITA exige o admin (abaixo).
+// Nota LGPD: isto expõe dados de contato dos servidores a quem alcança a porta
+// na LAN. Se um dia precisar de um portão, ver README (seção Segurança).
+app.get('/api/departments', (_req, res) => {
   res.json(store.listDepartments());
 });
 
-app.get('/api/employees', authenticate, (req, res) => {
+app.get('/api/employees', (req, res) => {
   const busca = typeof req.query.busca === 'string' ? req.query.busca : undefined;
   const departamento = typeof req.query.departamento === 'string' ? req.query.departamento : undefined;
   res.json(store.listEmployees({ busca, departamento }));
 });
 
-app.get('/api/employees/:id', authenticate, (req, res) => {
+app.get('/api/employees/:id', (req, res) => {
   const id = idParam(req, res);
   if (id === null) return;
   res.json(store.getEmployee(id));
 });
 
-app.get('/api/announcements', authenticate, (_req, res) => {
+app.get('/api/announcements', (_req, res) => {
   res.json(store.listAnnouncements());
 });
 
-app.get('/api/links', authenticate, (_req, res) => {
+app.get('/api/links', (_req, res) => {
   res.json(store.listLinks());
 });
 
@@ -139,6 +144,12 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   }
   if (err instanceof JaExiste) {
     res.status(409).json({ erro: err.message });
+    return;
+  }
+  // Erros de parsing do corpo (express.json) trazem um status 4xx próprio.
+  const status = (err as { status?: number; statusCode?: number }).status ?? (err as { statusCode?: number }).statusCode;
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    res.status(status).json({ erro: 'requisição inválida' });
     return;
   }
   console.error('erro inesperado:', err);

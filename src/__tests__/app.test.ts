@@ -34,9 +34,20 @@ describe('Intranet SEPLAG API', () => {
     expect(r.body.status).toBe('ok');
   });
 
-  it('bloqueia rota protegida sem token (401)', async () => {
+  it('leitura do diretório é pública (200 sem token)', async () => {
     const r = await request(app).get('/api/employees');
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body)).toBe(true);
+  });
+
+  it('escrita exige admin (401 sem token)', async () => {
+    const r = await request(app).post('/api/employees').send({ name: 'Sem Permissão' });
     expect(r.status).toBe(401);
+  });
+
+  it('corpo JSON malformado retorna 400 (não 500)', async () => {
+    const r = await request(app).post('/api/employees').set('Content-Type', 'application/json').send('{malformado');
+    expect(r.status).toBe(400);
   });
 
   it('login com senha errada é 401', async () => {

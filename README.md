@@ -1,7 +1,8 @@
 # Intranet SEPLAG
 
 Aplicação web interna da SEPLAG: **diretório de funcionários/ramais**, comunicados
-e links úteis, com login e um administrador que gerencia as pessoas.
+e links úteis. O usuário comum **não faz login** — consulta o diretório direto;
+o **login existe só para o administrador** gerenciar as pessoas e comunicados.
 
 Arquitetura enxuta, no mesmo formato do projeto de Sistemas Distribuídos da equipe:
 **um único servidor Express** que serve a interface web **e** a API REST, com
@@ -10,7 +11,8 @@ sem Docker, sem build. Roda em qualquer máquina da rede; os demais PCs acessam
 pela porta aberta no firewall.
 
 - **Servidor:** Node.js + Express 5 + TypeScript (rodando via `tsx`, sem build).
-- **Validação:** Zod. **Auth:** JWT + bcrypt (papéis `admin` e `viewer`).
+- **Validação:** Zod. **Auth:** leitura pública; escrita só para o admin
+  (JWT + bcrypt). Ver *Segurança* em [DEPLOY.md](DEPLOY.md#4-segurança).
 - **Dados:** `data/intranet.json` (escrita atômica). **UI:** `public/` (HTML/JS/CSS).
 
 ## Rodar (desenvolvimento ou produção)

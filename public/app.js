@@ -4,15 +4,11 @@ const app = document.querySelector('#app');
 let estado = { user: null, departments: [] };
 
 // ------------------------------------------------------------------ helpers
-function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-function setToken(t) {
-  localStorage.setItem(TOKEN_KEY, t);
-}
-function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
+const getToken = () => localStorage.getItem(TOKEN_KEY);
+const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+const isAdmin = () => estado.user?.role === 'admin';
+
 function esc(v) {
   const d = document.createElement('div');
   d.textContent = v == null ? '' : String(v);
@@ -26,7 +22,9 @@ async function api(path, options = {}) {
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const res = await fetch(`/api${path}`, { ...options, headers });
   if (res.status === 401) {
+    // Só ações de admin exigem token; se expirou, volta ao modo público.
     clearToken();
+    estado.user = null;
     renderLogin('Sessão expirada. Entre novamente.');
     throw new Error('não autenticado');
   }
@@ -37,21 +35,21 @@ async function api(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-const isAdmin = () => estado.user?.role === 'admin';
-
-// -------------------------------------------------------------------- login
+// -------------------------------------------------------------- login (admin)
 function renderLogin(msg = '') {
   app.innerHTML = `
     <main class="card">
       <h1>Intranet SEPLAG</h1>
-      <p class="subtitle">Acesso restrito</p>
+      <p class="subtitle">Entrar como administrador</p>
       <form id="f-login">
         <label>E-mail<input name="email" autocomplete="username" required /></label>
         <label>Senha<input name="senha" type="password" autocomplete="current-password" required /></label>
         <button type="submit">Entrar</button>
+        <button type="button" id="voltar" class="secundario">Voltar ao diretório</button>
         ${msg ? `<p class="error">${esc(msg)}</p>` : ''}
       </form>
     </main>`;
+  document.querySelector('#voltar').addEventListener('click', () => render());
   document.querySelector('#f-login').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -62,22 +60,24 @@ function renderLogin(msg = '') {
       });
       setToken(r.token);
       estado.user = r.user;
-      await renderApp();
+      await render();
     } catch (err) {
       renderLogin(err.message);
     }
   });
 }
 
-// ------------------------------------------------------------------- app
-async function renderApp() {
-  estado.user = await api('/me');
+// ---------------------------------------------------------------- render app
+async function render() {
   estado.departments = await api('/departments');
   app.innerHTML = `
     <header class="topbar">
       <span class="brand">Intranet SEPLAG</span>
-      <span>${esc(estado.user.name)} · ${esc(estado.user.role)}
-        <button id="logout">Sair</button></span>
+      <span>${
+        isAdmin()
+          ? `${esc(estado.user.name)} · admin <button id="logout">Sair</button>`
+          : `<button id="entrar">Entrar (admin)</button>`
+      }</span>
     </header>
     <main class="content">
       <section class="panel">
@@ -107,14 +107,18 @@ async function renderApp() {
       </section>
     </main>`;
 
-  document.querySelector('#logout').addEventListener('click', () => {
-    clearToken();
-    estado.user = null;
-    renderLogin();
-  });
+  if (isAdmin()) {
+    document.querySelector('#logout').addEventListener('click', () => {
+      clearToken();
+      estado.user = null;
+      render();
+    });
+    ligarFormularios();
+  } else {
+    document.querySelector('#entrar').addEventListener('click', () => renderLogin());
+  }
   document.querySelector('#busca').addEventListener('input', debounce(carregarFuncionarios, 250));
   document.querySelector('#dep').addEventListener('change', carregarFuncionarios);
-  if (isAdmin()) ligarFormularios();
 
   await Promise.all([carregarFuncionarios(), carregarAvisos(), carregarLinks()]);
 }
@@ -269,8 +273,16 @@ function debounce(fn, ms) {
 }
 
 // --------------------------------------------------------------------- boot
-if (getToken()) {
-  renderApp().catch(() => renderLogin());
-} else {
-  renderLogin();
+async function boot() {
+  // Se há um token guardado, confirma se ainda é um admin válido.
+  if (getToken()) {
+    try {
+      estado.user = await api('/me');
+    } catch {
+      estado.user = null;
+    }
+  }
+  await render();
 }
+
+boot();
