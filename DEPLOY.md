@@ -69,7 +69,7 @@ Nenhum `.deb`, nenhum PostgreSQL, nenhuma compilação. As dependências
 Todo o estado está em **um arquivo**:
 
 ```bash
-cp data/intranet.json  backup-intranet-$(date +%Y%m%d-%H%M%S).json
+npm run backup      # copia data/intranet.json para backups/backup-<timestamp>.json
 ```
 
 Restaurar = colocar o arquivo de volta em `data/` e reiniciar. (O segredo dos

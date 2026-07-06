@@ -11,6 +11,9 @@ data/*
 dados-reais*.sql
 employees_real_data*.sql
 
+# Backups do banco (npm run backup)
+backups/
+
 # Segredos e ambiente
 .env
 *.env

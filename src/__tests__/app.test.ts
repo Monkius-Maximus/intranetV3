@@ -86,6 +86,45 @@ describe('Intranet SEPLAG API', () => {
     expect(r.status).toBe(401);
   });
 
+  it('admin cria e remove link; leitura é pública', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/links')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Wiki Interna', url: 'https://wiki.seplag.local', description: 'Base de conhecimento' });
+    expect(criado.status).toBe(201);
+
+    const publico = await request(app).get('/api/links'); // sem token
+    expect(publico.status).toBe(200);
+    expect(publico.body.some((l: { title: string }) => l.title === 'Wiki Interna')).toBe(true);
+
+    const removido = await request(app)
+      .delete(`/api/links/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(removido.status).toBe(200);
+  });
+
+  // ---- Segurança: nada sensível alcançável pelo navegador ----
+
+  it('o banco de dados NÃO é servido por HTTP (404 em /data/…)', async () => {
+    for (const caminho of ['/data/intranet.json', '/data/jwt-secret.key', '/../data/intranet.json']) {
+      const r = await request(app).get(caminho);
+      expect(r.status, caminho).toBe(404);
+    }
+  });
+
+  it('nenhuma resposta da API expõe hash de senha ou segredo', async () => {
+    const login = await request(app)
+      .post('/api/login')
+      .send({ email: 'admin@test.local', senha: 'admin12345' });
+    expect(login.status).toBe(200);
+    expect(JSON.stringify(login.body)).not.toContain('passwordHash');
+    expect(JSON.stringify(login.body)).not.toContain('$2a$'); // prefixo bcrypt
+
+    const me = await request(app).get('/api/me').set('Authorization', `Bearer ${login.body.token}`);
+    expect(JSON.stringify(me.body)).not.toContain('passwordHash');
+  });
+
   it('admin cria funcionário e a busca o encontra', async () => {
     const token = await loginAdmin();
     const criar = await request(app)

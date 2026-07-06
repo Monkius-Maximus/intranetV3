@@ -104,6 +104,7 @@ async function render() {
       <section class="panel">
         <h2>Links úteis</h2>
         <div id="links"></div>
+        ${isAdmin() ? formLink() : ''}
       </section>
     </main>`;
 
@@ -276,14 +277,45 @@ function formAviso() {
 }
 
 // --------------------------------------------------------------------- links
+function escAttr(v) {
+  return esc(v).replace(/"/g, '&quot;');
+}
+
 async function carregarLinks() {
   const itens = await api('/links');
-  document.querySelector('#links').innerHTML = itens
-    .map(
-      (l) => `<a class="link-card" href="${esc(l.url)}" target="_blank" rel="noopener">
-        <strong>${esc(l.title)}</strong><span>${esc(l.description || '')}</span></a>`,
-    )
-    .join('');
+  const el = document.querySelector('#links');
+  el.innerHTML =
+    itens.length === 0
+      ? '<p class="vazio">Nenhum link cadastrado.</p>'
+      : itens
+          .map(
+            (l) => `<span class="link-item">
+              <a class="link-card" href="${escAttr(l.url)}" target="_blank" rel="noopener">
+                <strong>${esc(l.title)}</strong><span>${esc(l.description || '')}</span></a>
+              ${isAdmin() ? `<button class="link del-link" data-id="${l.id}">remover</button>` : ''}
+            </span>`,
+          )
+          .join('');
+  if (isAdmin()) {
+    el.querySelectorAll('.del-link').forEach((b) =>
+      b.addEventListener('click', async () => {
+        if (!confirm('Remover este link?')) return;
+        await api(`/links/${b.dataset.id}`, { method: 'DELETE' });
+        await carregarLinks();
+      }),
+    );
+  }
+}
+
+function formLink() {
+  return `
+    <form id="f-link" class="form-inline">
+      <input name="title" placeholder="Título" required />
+      <input name="url" type="url" placeholder="https://…" required />
+      <input name="description" placeholder="Descrição" />
+      <input name="category" placeholder="Categoria" />
+      <button type="submit">Adicionar</button>
+    </form>`;
 }
 
 // ---------------------------------------------------------------- admin forms
@@ -317,6 +349,26 @@ function ligarFormularios() {
     });
     e.target.reset();
     await carregarAvisos();
+  });
+
+  document.querySelector('#f-link')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await api('/links', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: fd.get('title'),
+          url: fd.get('url'),
+          description: fd.get('description') || null,
+          category: fd.get('category') || null,
+        }),
+      });
+      e.target.reset();
+      await carregarLinks();
+    } catch (err) {
+      alert(`Não foi possível adicionar o link: ${err.message}`);
+    }
   });
 }
 
