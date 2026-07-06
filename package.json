@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "importar-funcionarios": "tsx scripts/importar-funcionarios.ts",
-    "backup": "tsx scripts/backup.ts"
+    "backup": "tsx scripts/backup.ts",
+    "doctor": "node scripts/doctor.cjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

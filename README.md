@@ -57,6 +57,27 @@ npm test        # vitest + supertest (API)
 npm run typecheck
 ```
 
+## Solução de problemas
+
+Deu erro? Rode o diagnóstico e siga o que ele disser (funciona com Node puro,
+mesmo com `node_modules` quebrado):
+
+```bash
+npm run doctor                          # checa Node, plataforma, node_modules, data/
+npm run doctor -- caminho/arquivo.sql   # checa também o arquivo de dados
+```
+
+Erros comuns:
+
+| Sintoma | Causa | Correção |
+|---|---|---|
+| `You installed esbuild for another platform` | `node_modules` copiado entre sistemas (ex.: WSL ↔ Windows) | apague `node_modules` e rode `npm install` na máquina onde vai executar |
+| `Nenhum registro reconhecido em …` | arquivo errado (ex.: `add_all_employees.sql`, que só tem comentários) ou formato diferente | use o `employees_real_data_complete.sql`; o doctor mostra quantas linhas reconheceu |
+| Erro logo ao iniciar, mencionando a versão | Node < 18 | instale o Node LTS (o `npm install` e o app agora avisam claramente) |
+| Acentos virando `�` no import | arquivo salvo em UTF-16/BOM pelo Windows | o importador já detecta e converte sozinho (BOM UTF-8/UTF-16) |
+
+Se persistir, envie a saída **completa** do `npm run doctor` + o erro original.
+
 ## Deploy
 
 Veja **[DEPLOY.md](DEPLOY.md)** — o caminho simples (instalar Node, subir o app,

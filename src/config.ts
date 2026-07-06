@@ -3,6 +3,14 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Falha cedo e claro em Node antigo — em vez de um erro críptico mais adiante.
+const nodeMajor = Number(process.versions.node.split('.')[0]);
+if (nodeMajor < 18) {
+  console.error(`Node ${process.versions.node} é antigo demais: este projeto requer Node 18 ou superior.`);
+  console.error('Instale o Node LTS (nodejs.org) e rode tudo de novo a partir do `npm install`.');
+  process.exit(1);
+}
+
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
 
 // Diretório de dados locais (arquivo do "banco" JSON, segredo JWT). Fica fora do

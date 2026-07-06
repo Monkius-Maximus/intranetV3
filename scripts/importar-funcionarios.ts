@@ -5,9 +5,20 @@
 // Uso:
 //   npm run importar-funcionarios -- /caminho/employees_real_data_complete.sql
 //
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { seed } from '../src/seed';
 import * as store from '../src/store';
+
+// Lê o arquivo respeitando o BOM: arquivos salvos no Windows (PowerShell,
+// Bloco de Notas) costumam vir em UTF-16 ou UTF-8 com BOM — lidos como utf8
+// puro virariam lixo e o parser não reconheceria nenhuma linha.
+function lerTexto(arquivo: string): string {
+  const buf = readFileSync(arquivo);
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf[0] === 0xfe && buf[1] === 0xff) return Buffer.from(buf.subarray(2)).swap16().toString('utf16le');
+  if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return buf.subarray(3).toString('utf8');
+  return buf.toString('utf8');
+}
 
 interface Registro {
   name: string;
@@ -66,10 +77,20 @@ async function main(): Promise<void> {
     console.error('Uso: npm run importar-funcionarios -- <arquivo.sql>');
     process.exit(1);
   }
-  const sql = readFileSync(arquivo, 'utf8');
+  if (!existsSync(arquivo)) {
+    console.error(`Arquivo não encontrado: ${arquivo}`);
+    console.error('Confira o caminho (no Windows, use aspas se houver espaços).');
+    process.exit(1);
+  }
+  const sql = lerTexto(arquivo);
   const registros = parse(sql);
   if (registros.length === 0) {
-    console.error('Nenhum registro reconhecido no SQL. Formato esperado: INSERT INTO employees (...) VALUES (...).');
+    console.error(`Nenhum registro reconhecido em ${arquivo} (${sql.length} caracteres lidos).`);
+    console.error(
+      "Formato esperado por linha: ('Nome', 'email', 'ramal', 'setor', dia, mes, (SELECT id FROM departments WHERE code = 'SIGLA'))",
+    );
+    console.error('Confira se é o arquivo certo (employees_real_data_complete.sql, não add_all_employees.sql).');
+    console.error(`Diagnóstico completo: npm run doctor -- ${arquivo}`);
     process.exit(1);
   }
 
