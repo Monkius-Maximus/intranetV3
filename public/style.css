@@ -194,6 +194,45 @@ td.aniv {
   font-size: 0.8rem;
   padding: 0;
 }
+.aniv-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  column-count: 2;
+  column-gap: 2.5rem;
+}
+.aniv-lista li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  break-inside: avoid;
+  font-size: 0.9rem;
+}
+.aniv-dia {
+  font-weight: 600;
+  color: var(--brand);
+  min-width: 1.6rem;
+}
+.aniv-setor {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: right;
+}
+@media (max-width: 700px) {
+  .aniv-lista {
+    column-count: 1;
+  }
+}
+.link-grupo h3 {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .link-item {
   display: inline-flex;
   align-items: center;

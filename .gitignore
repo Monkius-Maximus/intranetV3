@@ -6,10 +6,11 @@ node_modules/
 data/*
 !data/.gitkeep
 
-# SQL de dados reais (fica só na máquina; carregado via importador).
+# Dados reais (ficam só na máquina; carregados via importador).
 *real*.sql
 dados-reais*.sql
 employees_real_data*.sql
+*.xlsx
 
 # Backups do banco (npm run backup)
 backups/

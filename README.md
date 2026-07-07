@@ -40,15 +40,30 @@ Variáveis de ambiente (todas opcionais):
 
 ## Carregar os funcionários reais (LGPD)
 
-O SQL com dados reais **não** vai para o git. Carregue-o localmente:
+Os arquivos com dados reais (XLSX/SQL) **não** vão para o git — ficam só na sua
+máquina e são carregados por um importador. Duas fontes possíveis:
+
+**A) XLSX de aniversariantes (recomendado — é o arquivo que você tem):**
+exportado da rota `aniversariantes2` do Seplagnet atual, no formato
+"Aniversariantes do mês de \<Mês\>" + linhas `dia | nome | setor`:
+
+```bash
+npm run importar-aniversariantes -- /caminho/ANIVERSARIANTES_SEPLAG_2026.xlsx
+```
+
+E-mail e ramal não existem nessa fonte: ficam vazios e podem ser preenchidos
+depois pela tela do admin (ou por uma integração futura, ex.: Synergy+).
+Grafias divergentes de setor são normalizadas (CEDIDO→CEDIDA, GABINTE→GABINETE,
+SUGESPE→SECOGE, `\` → `/`).
+
+**B) SQL completo (se você tiver o arquivo):**
 
 ```bash
 npm run importar-funcionarios -- /caminho/employees_real_data_complete.sql
 ```
 
-Isso lê os `INSERT INTO employees (...)` e grava em `data/intranet.json`
-(idempotente — rodar de novo troca o conjunto). Departamentos e links úteis já
-vêm no seed (`src/seed.ts`); não são dados pessoais.
+Ambos são idempotentes — rodar de novo substitui o quadro inteiro. Departamentos
+e links úteis já vêm no seed (`src/seed.ts`); não são dados pessoais.
 
 ## Testes
 

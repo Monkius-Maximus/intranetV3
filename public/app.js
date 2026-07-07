@@ -88,9 +88,9 @@ async function render() {
 
       <section class="panel">
         <div class="row">
-          <h2>Ramais / Funcionários</h2>
+          <h2>Contatos</h2>
           <div class="filtros">
-            <input id="busca" placeholder="Buscar nome, e-mail, setor, ramal…" />
+            <input id="busca" placeholder="Buscar por nome, ramal, e-mail ou setor…" />
             <select id="dep">
               <option value="">Todos os setores</option>
               ${estado.departments.map((d) => `<option value="${esc(d.code)}">${esc(d.code)}</option>`).join('')}
@@ -99,6 +99,11 @@ async function render() {
         </div>
         ${isAdmin() ? formFuncionario() : ''}
         <div id="funcionarios">carregando…</div>
+      </section>
+
+      <section class="panel">
+        <h2 id="aniv-titulo">Aniversariantes do mês</h2>
+        <ol id="aniversariantes" class="aniv-lista"></ol>
       </section>
 
       <section class="panel">
@@ -121,7 +126,35 @@ async function render() {
   document.querySelector('#busca').addEventListener('input', debounce(carregarFuncionarios, 250));
   document.querySelector('#dep').addEventListener('change', carregarFuncionarios);
 
-  await Promise.all([carregarFuncionarios(), carregarAvisos(), carregarLinks()]);
+  await Promise.all([carregarFuncionarios(), carregarAniversariantes(), carregarAvisos(), carregarLinks()]);
+}
+
+// ------------------------------------------------------------ aniversariantes
+const NOMES_MESES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+async function carregarAniversariantes() {
+  const todos = await api('/employees');
+  const mes = new Date().getMonth() + 1;
+  document.querySelector('#aniv-titulo').textContent =
+    `+Aniversariantes do mês de ${NOMES_MESES[mes - 1]}`;
+  const lista = todos
+    .filter((e) => e.birthMonth === mes && e.birthDay)
+    .sort((a, b) => a.birthDay - b.birthDay || a.name.localeCompare(b.name, 'pt'));
+  document.querySelector('#aniversariantes').innerHTML =
+    lista.length === 0
+      ? '<p class="vazio">Nenhum aniversariante neste mês.</p>'
+      : lista
+          .map(
+            (e) => `<li>
+              <span class="aniv-dia">${String(e.birthDay).padStart(2, '0')}</span>
+              <span>${esc(e.name)}</span>
+              <span class="aniv-setor">${esc(e.departmentFull || e.departmentCode || '')}</span>
+            </li>`,
+          )
+          .join('');
 }
 
 // ------------------------------------------------------------- funcionários
@@ -161,7 +194,7 @@ async function carregarFuncionarios() {
       b.addEventListener('click', async () => {
         if (!confirm('Remover este funcionário?')) return;
         await api(`/employees/${b.dataset.id}`, { method: 'DELETE' });
-        await carregarFuncionarios();
+        await Promise.all([carregarFuncionarios(), carregarAniversariantes()]);
       }),
     );
     el.querySelectorAll('.edit-func').forEach((b) =>
@@ -217,7 +250,7 @@ function editarLinha(emp) {
     }
     try {
       await api(`/employees/${emp.id}`, { method: 'PUT', body: JSON.stringify(patch) });
-      await carregarFuncionarios();
+      await Promise.all([carregarFuncionarios(), carregarAniversariantes()]);
     } catch (err) {
       alert(`Não foi possível salvar: ${err.message}`);
     }
@@ -284,18 +317,37 @@ function escAttr(v) {
 async function carregarLinks() {
   const itens = await api('/links');
   const el = document.querySelector('#links');
-  el.innerHTML =
-    itens.length === 0
-      ? '<p class="vazio">Nenhum link cadastrado.</p>'
-      : itens
-          .map(
-            (l) => `<span class="link-item">
-              <a class="link-card" href="${escAttr(l.url)}" target="_blank" rel="noopener">
-                <strong>${esc(l.title)}</strong><span>${esc(l.description || '')}</span></a>
-              ${isAdmin() ? `<button class="link del-link" data-id="${l.id}">remover</button>` : ''}
-            </span>`,
-          )
-          .join('');
+  if (itens.length === 0) {
+    el.innerHTML = '<p class="vazio">Nenhum link cadastrado.</p>';
+  } else {
+    // Agrupa por categoria (como os menus Sistemas/Servidor do Seplagnet).
+    const grupos = new Map();
+    for (const l of itens) {
+      const cat = l.category || 'Outros';
+      if (!grupos.has(cat)) grupos.set(cat, []);
+      grupos.get(cat).push(l);
+    }
+    const categorias = [...grupos.keys()].sort((a, b) =>
+      a === 'Outros' ? 1 : b === 'Outros' ? -1 : a.localeCompare(b, 'pt'),
+    );
+    el.innerHTML = categorias
+      .map(
+        (cat) => `<div class="link-grupo">
+          <h3>${esc(cat)}</h3>
+          ${grupos
+            .get(cat)
+            .map(
+              (l) => `<span class="link-item">
+                <a class="link-card" href="${escAttr(l.url)}" target="_blank" rel="noopener">
+                  <strong>${esc(l.title)}</strong><span>${esc(l.description || '')}</span></a>
+                ${isAdmin() ? `<button class="link del-link" data-id="${l.id}">remover</button>` : ''}
+              </span>`,
+            )
+            .join('')}
+        </div>`,
+      )
+      .join('');
+  }
   if (isAdmin()) {
     el.querySelectorAll('.del-link').forEach((b) =>
       b.addEventListener('click', async () => {
@@ -337,7 +389,7 @@ function ligarFormularios() {
       }),
     });
     e.target.reset();
-    await carregarFuncionarios();
+    await Promise.all([carregarFuncionarios(), carregarAniversariantes()]);
   });
 
   document.querySelector('#f-aviso')?.addEventListener('submit', async (e) => {

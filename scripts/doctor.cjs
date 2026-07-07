@@ -82,6 +82,16 @@ const arquivo = process.argv[2];
 if (arquivo) {
   if (!fs.existsSync(arquivo)) {
     falha(`arquivo não encontrado: ${arquivo}`, 'Confira o caminho (no Windows, use aspas se houver espaços).');
+  } else if (/\.xlsx$/i.test(arquivo)) {
+    // XLSX é um zip: só valida a assinatura ("PK") e o tamanho; o parsing
+    // completo é feito pelo importador (npm run importar-aniversariantes).
+    const buf = fs.readFileSync(arquivo);
+    if (buf.length > 4 && buf[0] === 0x50 && buf[1] === 0x4b) {
+      ok(`arquivo XLSX válido: ${arquivo} (${buf.length} bytes)`);
+      console.log('       -> importe com: npm run importar-aniversariantes -- ' + arquivo);
+    } else {
+      falha(`${arquivo} não parece um XLSX válido (assinatura zip ausente)`, 'Reexporte a planilha e tente de novo.');
+    }
   } else {
     const buf = fs.readFileSync(arquivo);
     let texto;
@@ -114,8 +124,9 @@ if (arquivo) {
 
 console.log('');
 if (problemas === 0) {
+  const importador = arquivo && /\.xlsx$/i.test(arquivo) ? 'importar-aniversariantes' : 'importar-funcionarios';
   console.log('Ambiente OK. Próximo passo:');
-  console.log(`  npm run importar-funcionarios -- ${arquivo || '<arquivo.sql>'}`);
+  console.log(`  npm run ${importador} -- ${arquivo || '<arquivo>'}`);
 } else {
   console.log(`${problemas} problema(s) encontrado(s) — corrija acima e rode de novo.`);
   console.log('Se persistir, envie a saída COMPLETA deste diagnóstico junto com o erro original.');
