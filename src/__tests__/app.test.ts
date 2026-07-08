@@ -4,30 +4,36 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import type { Express } from 'express';
+import type { Repositorio } from '../data/repositorio';
 
 let app: Express;
+let repo: Repositorio;
+let mesclarPessoas: typeof import('../ingest').mesclarPessoas;
 
 beforeAll(async () => {
-  // Ambiente isolado: dados num tempdir, admin conhecido, segredo fixo.
-  process.env.INTRANET_DATA = mkdtempSync(join(tmpdir(), 'intranet-test-'));
   process.env.ADMIN_EMAIL = 'admin@test.local';
   process.env.ADMIN_PASSWORD = 'admin12345';
   process.env.JWT_SECRET = 'segredo-de-teste';
+  const dir = mkdtempSync(join(tmpdir(), 'intranet-test-'));
 
-  const store = await import('../store');
+  const { RepositorioJson } = await import('../data/repositorioJson');
   const { seed } = await import('../seed');
-  ({ app } = await import('../app'));
-  await store.iniciar();
-  await seed();
+  const { criarApp } = await import('../http/app');
+  ({ mesclarPessoas } = await import('../ingest'));
+
+  repo = new RepositorioJson(join(dir, 'db.json'));
+  await repo.iniciar();
+  await seed(repo);
+  app = criarApp(repo);
 });
 
 async function loginAdmin(): Promise<string> {
-  const r = await request(app).post('/api/login').send({ email: 'admin@test.local', senha: 'admin12345' });
+  const r = await request(app).post('/api/auth/login').send({ email: 'admin@test.local', senha: 'admin12345' });
   expect(r.status).toBe(200);
   return r.body.token;
 }
 
-describe('Intranet SEPLAG API', () => {
+describe('Saúde e acesso', () => {
   it('health responde 200', async () => {
     const r = await request(app).get('/api/health');
     expect(r.status).toBe(200);
@@ -35,108 +41,137 @@ describe('Intranet SEPLAG API', () => {
   });
 
   it('leitura do diretório é pública (200 sem token)', async () => {
-    const r = await request(app).get('/api/employees');
+    const r = await request(app).get('/api/pessoas');
     expect(r.status).toBe(200);
     expect(Array.isArray(r.body)).toBe(true);
   });
 
   it('escrita exige admin (401 sem token)', async () => {
-    const r = await request(app).post('/api/employees').send({ name: 'Sem Permissão' });
+    const r = await request(app).post('/api/pessoas').send({ name: 'Sem Permissão' });
+    expect(r.status).toBe(401);
+  });
+
+  it('login com senha errada é 401', async () => {
+    const r = await request(app).post('/api/auth/login').send({ email: 'admin@test.local', senha: 'errada' });
     expect(r.status).toBe(401);
   });
 
   it('corpo JSON malformado retorna 400 (não 500)', async () => {
-    const r = await request(app).post('/api/employees').set('Content-Type', 'application/json').send('{malformado');
+    const r = await request(app).post('/api/pessoas').set('Content-Type', 'application/json').send('{ruim');
     expect(r.status).toBe(400);
   });
+});
 
-  it('login com senha errada é 401', async () => {
-    const r = await request(app).post('/api/login').send({ email: 'admin@test.local', senha: 'errada' });
-    expect(r.status).toBe(401);
-  });
-
-  it('seed criou os departamentos', async () => {
-    const token = await loginAdmin();
-    const r = await request(app).get('/api/departments').set('Authorization', `Bearer ${token}`);
+describe('Pessoas', () => {
+  it('seed criou os setores', async () => {
+    const r = await request(app).get('/api/setores');
     expect(r.status).toBe(200);
     expect(r.body.length).toBe(9);
   });
 
-  it('admin edita funcionário (PUT parcial) e preserva o resto', async () => {
+  it('admin cria pessoa e a busca a encontra (acento-insensível)', async () => {
+    const token = await loginAdmin();
+    const criar = await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Fulano de Tál', departmentCode: 'SEPO' });
+    expect(criar.status).toBe(201);
+    expect(criar.body.status).toBe('ativo'); // default do modelo expandido
+    expect(criar.body.competencias).toEqual([]);
+
+    const lista = await request(app).get('/api/pessoas?busca=FULANO DE TAL').set('Authorization', `Bearer ${token}`);
+    expect(lista.body).toHaveLength(1);
+  });
+
+  it('PUT parcial preserva os demais campos', async () => {
     const token = await loginAdmin();
     const criado = await request(app)
-      .post('/api/employees')
+      .post('/api/pessoas')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Beltrana Editável', phoneExtension: '1111', departmentCode: 'IGPE', departmentFull: 'IGPE/GESTAO' });
-    expect(criado.status).toBe(201);
-
     const editado = await request(app)
-      .put(`/api/employees/${criado.body.id}`)
+      .put(`/api/pessoas/${criado.body.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ phoneExtension: '2222' });
     expect(editado.status).toBe(200);
     expect(editado.body.phoneExtension).toBe('2222');
-    // patch parcial não pode apagar os demais campos
     expect(editado.body.name).toBe('Beltrana Editável');
     expect(editado.body.departmentFull).toBe('IGPE/GESTAO');
   });
+});
 
-  it('PUT sem token é 401', async () => {
-    const r = await request(app).put('/api/employees/1').send({ name: 'X' });
+describe('Ingestão multi-origem (merge preserva enriquecimento)', () => {
+  it('reimportar atualiza o núcleo mas NÃO apaga e-mail/cargo preenchidos', async () => {
+    const token = await loginAdmin();
+    // 1ª importação (só núcleo)
+    await mesclarPessoas(
+      repo,
+      [{ name: 'Zé Procedência', departmentCode: 'SEPO', departmentFull: 'SEPO', birthDay: 5, birthMonth: 5 }],
+      'xlsx',
+    );
+    const achado = (await repo.pessoas.listar({ busca: 'Zé Procedência' }))[0];
+
+    // admin enriquece
+    await request(app)
+      .put(`/api/pessoas/${achado.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'ze@seplag.pe.gov.br', cargo: 'Analista' });
+
+    // reimportação: muda o setor (núcleo)
+    await mesclarPessoas(
+      repo,
+      [{ name: 'Zé Procedência', departmentCode: 'IGPE', departmentFull: 'IGPE', birthDay: 5, birthMonth: 5 }],
+      'xlsx',
+    );
+
+    const depois = await repo.pessoas.obter(achado.id);
+    expect(depois?.departmentCode).toBe('IGPE'); // núcleo atualizado
+    expect(depois?.email).toBe('ze@seplag.pe.gov.br'); // enriquecimento preservado
+    expect(depois?.cargo).toBe('Analista');
+  });
+});
+
+describe('Navegação dirigida por banco', () => {
+  it('árvore pública traz os grupos do seed', async () => {
+    const r = await request(app).get('/api/navegacao');
+    expect(r.status).toBe(200);
+    expect(r.body.map((g: { nome: string }) => g.nome)).toContain('Sistemas');
+  });
+
+  it('admin cria grupo e item; aparecem na árvore', async () => {
+    const token = await loginAdmin();
+    const g = await request(app)
+      .post('/api/navegacao/grupos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nome: 'Grupo Teste', destaque: true });
+    expect(g.status).toBe(201);
+    const item = await request(app)
+      .post('/api/navegacao/itens')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ grupoId: g.body.id, label: 'Item X', url: 'https://exemplo.gov.br' });
+    expect(item.status).toBe(201);
+
+    const arvore = await request(app).get('/api/navegacao');
+    const grupo = arvore.body.find((x: { id: number }) => x.id === g.body.id);
+    expect(grupo.itens).toHaveLength(1);
+  });
+
+  it('criar grupo sem token é 401', async () => {
+    const r = await request(app).post('/api/navegacao/grupos').send({ nome: 'X' });
     expect(r.status).toBe(401);
   });
+});
 
-  it('admin cria e remove link; leitura é pública', async () => {
-    const token = await loginAdmin();
-    const criado = await request(app)
-      .post('/api/links')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Wiki Interna', url: 'https://wiki.seplag.local', description: 'Base de conhecimento' });
-    expect(criado.status).toBe(201);
-
-    const publico = await request(app).get('/api/links'); // sem token
-    expect(publico.status).toBe(200);
-    expect(publico.body.some((l: { title: string }) => l.title === 'Wiki Interna')).toBe(true);
-
-    const removido = await request(app)
-      .delete(`/api/links/${criado.body.id}`)
-      .set('Authorization', `Bearer ${token}`);
-    expect(removido.status).toBe(200);
-  });
-
-  // ---- Segurança: nada sensível alcançável pelo navegador ----
-
-  it('o banco de dados NÃO é servido por HTTP (404 em /data/…)', async () => {
-    for (const caminho of ['/data/intranet.json', '/data/jwt-secret.key', '/../data/intranet.json']) {
-      const r = await request(app).get(caminho);
-      expect(r.status, caminho).toBe(404);
+describe('Segurança', () => {
+  it('o banco NÃO é servido por HTTP', async () => {
+    for (const p of ['/data/intranet.json', '/../data/intranet.json', '/data/jwt-secret.key']) {
+      expect((await request(app).get(p)).status).toBe(404);
     }
   });
 
-  it('nenhuma resposta da API expõe hash de senha ou segredo', async () => {
-    const login = await request(app)
-      .post('/api/login')
-      .send({ email: 'admin@test.local', senha: 'admin12345' });
-    expect(login.status).toBe(200);
+  it('nenhuma resposta expõe hash de senha', async () => {
+    const login = await request(app).post('/api/auth/login').send({ email: 'admin@test.local', senha: 'admin12345' });
     expect(JSON.stringify(login.body)).not.toContain('passwordHash');
-    expect(JSON.stringify(login.body)).not.toContain('$2a$'); // prefixo bcrypt
-
-    const me = await request(app).get('/api/me').set('Authorization', `Bearer ${login.body.token}`);
-    expect(JSON.stringify(me.body)).not.toContain('passwordHash');
-  });
-
-  it('admin cria funcionário e a busca o encontra', async () => {
-    const token = await loginAdmin();
-    const criar = await request(app)
-      .post('/api/employees')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Fulano de Tal', email: 'fulano@seplag.pe.gov.br', departmentCode: 'SEPO' });
-    expect(criar.status).toBe(201);
-
-    // busca acento-insensível
-    const lista = await request(app).get('/api/employees?busca=FULANO').set('Authorization', `Bearer ${token}`);
-    expect(lista.status).toBe(200);
-    expect(lista.body).toHaveLength(1);
-    expect(lista.body[0].name).toBe('Fulano de Tal');
+    expect(JSON.stringify(login.body)).not.toContain('$2a$');
   });
 });

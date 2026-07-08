@@ -2,12 +2,12 @@ import type { NextFunction, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from './config';
-import type { Role } from './store';
+import type { Papel } from './domain/usuario';
 
 export interface TokenPayload {
   sub: number;
   email: string;
-  role: Role;
+  role: Papel;
   name: string;
 }
 
@@ -31,7 +31,7 @@ export interface AuthedRequest extends Request {
   user?: TokenPayload;
 }
 
-export function authenticate(req: AuthedRequest, res: Response, next: NextFunction): void {
+export function autenticar(req: AuthedRequest, res: Response, next: NextFunction): void {
   const header = req.header('authorization');
   if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ erro: 'não autenticado' });
@@ -45,7 +45,7 @@ export function authenticate(req: AuthedRequest, res: Response, next: NextFuncti
   }
 }
 
-export function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction): void {
+export function exigirAdmin(req: AuthedRequest, res: Response, next: NextFunction): void {
   if (req.user?.role !== 'admin') {
     res.status(403).json({ erro: 'acesso restrito a administradores' });
     return;

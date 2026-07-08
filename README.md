@@ -99,11 +99,30 @@ Veja **[DEPLOY.md](DEPLOY.md)** — o caminho simples (instalar Node, subir o ap
 abrir a porta) e a variante air-gapped, caso a máquina realmente não tenha
 internet no setup.
 
-## Estrutura
+## Arquitetura
+
+Separada em camadas para crescer sem reescrever: domínio (regras), dados (origem
+trocável) e ingestão (adaptadores de origem).
 
 ```
-src/        config, persistência (JSON atômico), store (domínio), auth, schemas, seed, app, index
-public/     interface web (login + diretório + comunicados + links)
-scripts/    importar-funcionarios.ts (carga dos dados reais)
-data/       banco JSON + segredo JWT  (NÃO versionado — LGPD)
+src/
+  domain/      pessoa · aviso · navegacao · usuario · departamento · erros   (tipos + validação, sem I/O)
+  data/        repositorio.ts (INTERFACE) · repositorioJson.ts · arquivoJson.ts   (troca de origem mora aqui)
+  sources/     contrato.ts · xlsxAniversariantes.ts · sqlEmployees.ts   (1 adaptador por origem)
+  ingest.ts    merge/upsert — reimportar preserva o enriquecimento (e-mail, cargo, redes…)
+  http/        pessoas · avisos · navegacao · setores · auth · health · app   (1 rota por módulo)
+  auth.ts · config.ts · seed.ts · index.ts
+public/js/
+  core/        api · dom
+  componentes/ navbar · avisos · contatos · aniversariantes · links   (componentes independentes)
+  app.js       monta o layout (ordem dos módulos)
+scripts/       importar-aniversariantes · importar-funcionarios · backup · doctor
+data/          banco JSON + segredo JWT   (NÃO versionado — LGPD)
 ```
+
+**Trocar a origem dos dados** (JSON → SQLite/Postgres/API) = implementar outra
+classe que satisfaça `data/repositorio.ts`, sem tocar em rotas, domínio ou UI.
+**Modelo de Pessoa** cresce por campos opcionais tipados (cargo, redes,
+competências, período de atuação…) — base pronta para o módulo Synergy+.
+**Navegação** (menus e cards) é dirigida por banco: o admin adiciona/remove pela
+tela, sem código.

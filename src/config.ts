@@ -17,6 +17,11 @@ const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
 // git — ver .gitignore. Pode ser realocado com INTRANET_DATA (ex.: um volume).
 export const DATA_DIR = process.env.INTRANET_DATA ?? join(raiz, 'data');
 
+// Caminho do arquivo de banco (usado pelo repositório JSON e pelo backup).
+export function caminhoBanco(): string {
+  return process.env.INTRANET_DB ?? join(DATA_DIR, 'intranet.json');
+}
+
 function garantirDir(dir: string): void {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });

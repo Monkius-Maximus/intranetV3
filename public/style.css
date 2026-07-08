@@ -75,14 +75,100 @@ select {
 /* app */
 .topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.5rem;
+  gap: 1.25rem;
+  padding: 0.6rem 1.5rem;
   background: var(--brand);
   color: #fff;
+  flex-wrap: wrap;
 }
 .brand {
   font-weight: 600;
+}
+.conta {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Barra de menus dirigida por banco */
+.menus {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.menu {
+  position: relative;
+}
+.menu-btn,
+.menu-link {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font: inherit;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.menu-btn:hover,
+.menu-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.menu-drop {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+  z-index: 20;
+}
+.menu:hover .menu-drop,
+.menu:focus-within .menu-drop {
+  display: block;
+}
+.menu-drop a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.menu-drop a:hover {
+  background: var(--bg);
+}
+.menu-add-grupo,
+.menu-add-item {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+.menu-add-item {
+  width: 100%;
+  color: var(--brand);
+  background: var(--bg);
+  border-color: var(--border);
+  margin-top: 0.25rem;
+}
+.menu-drop .del-item {
+  color: #b00020;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 .topbar button {
   margin-left: 0.75rem;

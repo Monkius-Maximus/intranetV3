@@ -1,14 +1,13 @@
 // Copia o banco (data/intranet.json) para backups/backup-<timestamp>.json.
 // Todo o estado da aplicação vive nesse único arquivo; restaurar = copiar o
-// backup de volta para data/intranet.json e reiniciar o servidor.
+// backup de volta e reiniciar o servidor.
 //
 // Uso:  npm run backup
-//
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { caminhoArquivo } from '../src/persistencia';
+import { caminhoBanco } from '../src/config';
 
-const origem = caminhoArquivo();
+const origem = caminhoBanco();
 if (!existsSync(origem)) {
   console.error(`Nada a copiar: ${origem} ainda não existe (o servidor nunca rodou?).`);
   process.exit(1);

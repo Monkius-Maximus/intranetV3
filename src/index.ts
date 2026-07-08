@@ -1,16 +1,18 @@
-import { app } from './app';
-import { config } from './config';
-import { caminhoArquivo } from './persistencia';
+import { caminhoBanco, config } from './config';
+import { RepositorioJson } from './data/repositorioJson';
+import { criarApp } from './http/app';
 import { seed } from './seed';
-import * as store from './store';
 
 async function main(): Promise<void> {
-  await store.iniciar();
-  await seed();
-  app.listen(config.port, config.host, () => {
+  const repo = new RepositorioJson(caminhoBanco());
+  await repo.iniciar();
+  await seed(repo);
+
+  const app = criarApp(repo);
+  app.listen(config.port, config.host, async () => {
     console.log(`Intranet SEPLAG no ar em http://${config.host}:${config.port}`);
-    console.log(`Dados: ${caminhoArquivo()}`);
-    console.log(`Funcionários carregados: ${store.countEmployees()}`);
+    console.log(`Dados: ${caminhoBanco()}`);
+    console.log(`Pessoas carregadas: ${await repo.pessoas.contar()}`);
     console.log('Abra a porta no firewall para os demais PCs da rede acessarem.');
   });
 }

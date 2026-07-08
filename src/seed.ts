@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
-import { config } from './config';
 import { hashPassword } from './auth';
-import * as store from './store';
+import { config } from './config';
+import type { Repositorio } from './data/repositorio';
 
-// Estrutura organizacional da SEPLAG (NÃO é dado pessoal — pode ser versionada).
+// Estrutura organizacional (não é dado pessoal — pode ser versionada).
 const DEPARTAMENTOS: { code: string; name: string; description: string }[] = [
   { code: 'SECOGE', name: 'SECOGE - Secretaria de Controladoria Geral do Estado', description: 'Controladoria Geral' },
   { code: 'SEPO', name: 'SEPO - Secretaria Executiva de Planejamento e Orçamento', description: 'Planejamento e Orçamento' },
@@ -16,26 +16,68 @@ const DEPARTAMENTOS: { code: string; name: string; description: string }[] = [
   { code: 'OUTROS', name: 'OUTROS', description: 'Outros Setores' },
 ];
 
-const LINKS: { title: string; url: string; description: string; category: string; order: number }[] = [
-  { title: 'Portal do Servidor', url: 'https://portal.seplag.pe.gov.br', description: 'Acesso a contracheques e informações.', category: 'Servidor', order: 1 },
-  { title: 'Sistema de Ponto', url: 'https://ponto.seplag.pe.gov.br', description: 'Registro de frequência diário.', category: 'Interno', order: 2 },
-  { title: 'Email (Webmail)', url: 'https://webmail.seplag.pe.gov.br', description: 'Acesso ao e-mail corporativo.', category: 'Ferramentas', order: 3 },
-  { title: 'SEI (Sistema Eletrônico)', url: 'https://sei.pe.gov.br', description: 'Protocolo e gestão de processos.', category: 'Interno', order: 4 },
+// Navegação inicial de EXEMPLO, espelhando o Seplagnet. O admin ajusta as URLs
+// reais e adiciona/remove itens pela própria tela (é dado, não código).
+interface GrupoSeed {
+  nome: string;
+  url?: string;
+  destaque?: boolean;
+  itens: { label: string; url: string; descricao?: string }[];
+}
+const NAVEGACAO: GrupoSeed[] = [
+  {
+    nome: 'Sistemas',
+    itens: [
+      { label: 'SEI!', url: 'https://sei.pe.gov.br', descricao: 'Protocolo e gestão de processos' },
+      { label: 'Expresso', url: 'https://expresso.pe.gov.br', descricao: 'Correio e agenda' },
+      { label: 'e-Fisco', url: 'https://efisco.sefaz.pe.gov.br', descricao: 'Sistema fazendário' },
+    ],
+  },
+  {
+    nome: 'Servidor',
+    itens: [
+      { label: 'Contracheque', url: 'https://portal.seplag.pe.gov.br', descricao: 'Contracheque e perícias' },
+      { label: 'Sistema de Ponto', url: 'https://ponto.seplag.pe.gov.br', descricao: 'Registro de frequência' },
+      { label: 'Moodle - EAD IGPE', url: 'https://ead.igpe.pe.gov.br', descricao: 'Capacitação' },
+    ],
+  },
+  { nome: 'Transparência', url: 'https://www.transparencia.pe.gov.br', itens: [] },
+  {
+    nome: 'Acesso rápido',
+    destaque: true,
+    itens: [
+      { label: 'Portal do Servidor', url: 'https://portal.seplag.pe.gov.br', descricao: 'Contracheques e informações' },
+      { label: 'E-mail (Webmail)', url: 'https://webmail.seplag.pe.gov.br', descricao: 'E-mail corporativo' },
+    ],
+  },
 ];
 
-export async function seed(): Promise<void> {
+export async function seed(repo: Repositorio): Promise<void> {
   for (const d of DEPARTAMENTOS) {
-    await store.upsertDepartment(d);
+    await repo.departamentos.upsert(d);
   }
-  if (store.countLinks() === 0) {
-    for (const l of LINKS) {
-      await store.createLink(l);
+
+  if ((await repo.navegacao.contarGrupos()) === 0) {
+    for (const g of NAVEGACAO) {
+      const grupo = await repo.navegacao.criarGrupo({
+        nome: g.nome,
+        url: g.url ?? null,
+        destaque: Boolean(g.destaque),
+      });
+      for (const it of g.itens) {
+        await repo.navegacao.criarItem({
+          grupoId: grupo.id,
+          label: it.label,
+          url: it.url,
+          descricao: it.descricao ?? null,
+        });
+      }
     }
   }
-  // Bootstrap do primeiro admin, só se ainda não houver nenhum usuário.
-  if (store.countUsers() === 0) {
+
+  if ((await repo.usuarios.contar()) === 0) {
     const senha = config.adminPassword ?? crypto.randomBytes(9).toString('base64url');
-    await store.createUser({
+    await repo.usuarios.criar({
       email: config.adminEmail,
       passwordHash: hashPassword(senha),
       role: 'admin',
