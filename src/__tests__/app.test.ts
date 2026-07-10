@@ -131,6 +131,39 @@ describe('Ingestão multi-origem (merge preserva enriquecimento)', () => {
   });
 });
 
+describe('Avisos', () => {
+  it('admin cria, edita parcialmente (PUT) e o restante é preservado', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Título original', body: 'Corpo original', pinned: true });
+    expect(criado.status).toBe(201);
+
+    const editado = await request(app)
+      .put(`/api/avisos/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ body: 'Corpo revisado' });
+    expect(editado.status).toBe(200);
+    expect(editado.body.body).toBe('Corpo revisado');
+    expect(editado.body.title).toBe('Título original'); // preservado
+    expect(editado.body.pinned).toBe(true); // preservado
+    expect(editado.body.id).toBe(criado.body.id); // mesmo registro
+    expect(editado.body.createdAt).toBe(criado.body.createdAt);
+  });
+
+  it('PUT sem token é 401; id inexistente é 404', async () => {
+    const semToken = await request(app).put('/api/avisos/1').send({ title: 'X' });
+    expect(semToken.status).toBe(401);
+    const token = await loginAdmin();
+    const naoExiste = await request(app)
+      .put('/api/avisos/99999')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'X' });
+    expect(naoExiste.status).toBe(404);
+  });
+});
+
 describe('Navegação dirigida por banco', () => {
   it('árvore pública traz os grupos do seed', async () => {
     const r = await request(app).get('/api/navegacao');

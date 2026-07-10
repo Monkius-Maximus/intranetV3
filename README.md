@@ -51,6 +51,9 @@ exportado da rota `aniversariantes2` do Seplagnet atual, no formato
 npm run importar-aniversariantes -- /caminho/ANIVERSARIANTES_SEPLAG_2026.xlsx
 ```
 
+**Rode o importador com o app parado** (o servidor mantém o estado em memória
+e sobrescreveria a importação na próxima gravação); depois suba com `npm start`.
+
 E-mail e ramal não existem nessa fonte: ficam vazios e podem ser preenchidos
 depois pela tela do admin (ou por uma integração futura, ex.: Synergy+).
 Grafias divergentes de setor são normalizadas (CEDIDO→CEDIDA, GABINTE→GABINETE,

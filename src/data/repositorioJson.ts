@@ -9,7 +9,7 @@ import type {
   Repositorio,
 } from './repositorio';
 import { NaoEncontrado } from '../domain/erros';
-import type { Aviso, DadosNovoAviso } from '../domain/aviso';
+import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { Departamento } from '../domain/departamento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
 import { type DadosNovaPessoa, type PatchPessoa, type Pessoa, pessoaVazia } from '../domain/pessoa';
@@ -137,6 +137,13 @@ export class RepositorioJson implements Repositorio {
         createdAt: new Date().toISOString(),
       };
       this.doc.avisos.push(a);
+      await this.persistir();
+      return a;
+    },
+    atualizar: async (id, patch: PatchAviso) => {
+      const a = this.doc.avisos.find((x) => x.id === id);
+      if (!a) throw new NaoEncontrado('comunicado não encontrado');
+      Object.assign(a, patch);
       await this.persistir();
       return a;
     },

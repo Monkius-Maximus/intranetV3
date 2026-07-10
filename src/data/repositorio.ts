@@ -1,4 +1,4 @@
-import type { Aviso, DadosNovoAviso } from '../domain/aviso';
+import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { Departamento } from '../domain/departamento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
 import type { DadosNovaPessoa, PatchPessoa, Pessoa } from '../domain/pessoa';
@@ -35,6 +35,7 @@ export interface RepoDepartamentos {
 export interface RepoAvisos {
   listar(): Promise<Aviso[]>;
   criar(dados: DadosNovoAviso & { createdBy: number | null }): Promise<Aviso>;
+  atualizar(id: number, patch: PatchAviso): Promise<Aviso>;
   remover(id: number): Promise<Aviso>;
 }
 

@@ -48,21 +48,73 @@ necessário nginx.
 
 ## 2. Variante air-gapped (a máquina NÃO tem internet no setup)
 
-Como não há banco nem pacotes de sistema, o "pacote offline" é trivial — bem mais
-simples que a abordagem anterior:
+Não há banco nem pacotes de sistema: o "pacote offline" é a **pasta do app com
+`node_modules/`** + o instalador do Node. Uma ressalva importante: quase todas
+as dependências são JavaScript puro (`express`, `zod`, `bcryptjs`,
+`jsonwebtoken`), **mas o `tsx` traz o esbuild, que tem um binário nativo por
+SO/arquitetura**. Ou seja: o `node_modules/` montado no WSL/Ubuntu funciona num
+servidor **Linux x64**, e **não** funciona num servidor **Windows** (é o erro
+`You installed esbuild for another platform` do README).
 
-1. Numa máquina com internet, do mesmo SO/arquitetura:
-   ```bash
-   npm install --omit=dev        # baixa as dependências (JS puro, sem compilar)
-   ```
-   Baixe também o tarball oficial do Node (`node-vXX-linux-x64.tar.xz`).
-2. Leve num pendrive: **a pasta do app inteira (com `node_modules/`)** + o
-   tarball do Node.
-3. Na máquina-alvo: extraia o Node para `/opt/node` (ou instale o `.msi` no
-   Windows) e rode `npm start` (ou `node_modules/.bin/tsx src/index.ts`).
+### 2.1 Preparando o pacote no WSL (Ubuntu)
 
-Nenhum `.deb`, nenhum PostgreSQL, nenhuma compilação. As dependências
-(`express`, `zod`, `bcryptjs`, `jsonwebtoken`, `tsx`) são JavaScript puro.
+Na máquina com internet (seu WSL):
+
+```bash
+git clone <repo> intranet && cd intranet
+git checkout <branch>                # ex.: claude/redesign-ui-intranet
+npm ci --omit=dev                    # dependências de produção, reprodutíveis
+
+# Carregue as PESSOAS REAIS agora, para o banco viajar junto com o pacote.
+# Defina a senha do admin AQUI: o importador cria o usuário admin na 1ª
+# execução, e é ESTA senha que valerá no servidor.
+ADMIN_EMAIL=admin@seplag.local ADMIN_PASSWORD='umaSenhaForte' \
+  npm run importar-aniversariantes -- /mnt/c/Users/voce/ANIVERSARIANTES_SEPLAG_2026.xlsx
+
+# (Opcional) confira localmente antes de empacotar:
+#   npm start   →  http://localhost:3000
+# Importante: NUNCA rode o importador com o app no ar (o servidor mantém o
+# estado em memória e sobrescreveria a importação na próxima gravação).
+
+# Empacote (tar preserva permissões e evita corrupção ao cruzar /mnt/c):
+cd .. && tar -czf intranet.tar.gz intranet
+```
+
+O `data/intranet.json` (pessoas reais) e o `data/jwt-secret.key` vão dentro do
+tarball — é intencional: o servidor já nasce com o quadro completo e o admin
+criado. **Trate o tarball como dado pessoal (LGPD): pendrive, não e-mail/nuvem.**
+
+Baixe também o Node para o SO do servidor em <https://nodejs.org/en/download>:
+`node-v22.x-linux-x64.tar.xz` (Linux) ou o instalador `.msi` (Windows).
+
+### 2.2 Se o servidor é Linux (x64)
+
+Leve `intranet.tar.gz` + o tarball do Node num pendrive:
+
+```bash
+sudo tar -xJf node-v22.*-linux-x64.tar.xz -C /opt && sudo mv /opt/node-v22.* /opt/node
+export PATH=/opt/node/bin:$PATH      # persista no ~/.bashrc ou no service
+tar -xzf intranet.tar.gz && cd intranet
+npm start                            # sobe em http://0.0.0.0:3000
+```
+
+### 2.3 Se o servidor é Windows
+
+O `node_modules/` do WSL **não serve**. Duas saídas:
+
+- **A (mais simples):** faça o passo 2.1 numa máquina **Windows** com internet
+  (instale o Node, `npm ci --omit=dev`, importe o XLSX, zipe a pasta).
+- **B (a partir do próprio WSL, npm ≥ 10):** monte uma cópia com os binários
+  do Windows — o npm baixa o esbuild da outra plataforma com:
+  ```bash
+  cp -r intranet intranet-win && cd intranet-win && rm -rf node_modules
+  npm ci --omit=dev --force --os=win32 --cpu=x64
+  cd .. && tar -czf intranet-win.tar.gz intranet-win
+  ```
+  (Essa cópia não roda no WSL — é só para levar ao servidor Windows.)
+
+No servidor: instale o `.msi` do Node, extraia a pasta e rode `npm start`
+(Agendador de Tarefas ou `nssm` para manter como serviço — ver seção 1).
 
 ## 3. Backup e restauração
 

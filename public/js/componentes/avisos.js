@@ -201,9 +201,9 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
       return;
     }
     acaoAdmin(ctx, async () => {
-      await api('/avisos', { method: 'POST', body: JSON.stringify({ title, body, pinned: fixar }) });
-      // A API não tem update: "editar" recria e remove o antigo.
-      if (edicao) await api(`/avisos/${editar.id}`, { method: 'DELETE' });
+      const corpo = JSON.stringify({ title, body, pinned: fixar });
+      if (edicao) await api(`/avisos/${editar.id}`, { method: 'PUT', body: corpo });
+      else await api('/avisos', { method: 'POST', body: corpo });
       ctx.aoMudarAvisos?.();
       voltar();
     });
