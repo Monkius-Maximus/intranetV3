@@ -1,0 +1,62 @@
+import { avatar, esc, ico } from '../core/ui.js';
+
+// Barra lateral de navegação (substitui a antiga barra de menus do topo).
+// A navegação entre sistemas externos foi para os tiles/Links úteis; a sidebar
+// é a navegação interna do portal, com um grupo "Administração" para o admin.
+
+const ITENS = [
+  { key: 'inicio', label: 'Início', icon: 'home' },
+  { key: 'comunicados', label: 'Comunicados', icon: 'campaign' },
+  { key: 'ramais', label: 'Ramais', icon: 'contacts' },
+];
+const ITENS_ADMIN = [
+  { key: 'usuarios', label: 'Usuários', icon: 'group' },
+  { key: 'gerenciar-comunicados', label: 'Gerenciar comunicados', icon: 'edit_note' },
+];
+
+// A view atual pode não ser exatamente a chave do menu (ex.: novo-comunicado
+// destaca "Gerenciar comunicados").
+function chaveAtiva(view) {
+  if (view === 'novo-comunicado') return 'gerenciar-comunicados';
+  return view;
+}
+
+export function renderSidebar(el, ctx) {
+  const ativa = chaveAtiva(ctx.view);
+  const item = (i) =>
+    `<button class="nav-item ${i.key === ativa ? 'is-active' : ''}" data-view="${i.key}">${ico(i.icon, {
+      size: 21,
+    })}<span>${esc(i.label)}</span></button>`;
+
+  el.innerHTML = `
+    <div class="sidebar-brand">
+      <div class="brand-mark">SP</div>
+      <div><div class="brand-name">Intranet</div><div class="brand-sub">SEPLAG</div></div>
+    </div>
+    <nav class="sidebar-nav">
+      ${ITENS.map(item).join('')}
+      ${
+        ctx.admin
+          ? `<div class="nav-group-label">Administração</div>${ITENS_ADMIN.map(item).join('')}`
+          : ''
+      }
+    </nav>
+    <div class="sidebar-foot">
+      ${
+        ctx.admin
+          ? `<div class="user-chip">
+              ${avatar(ctx.usuario?.name || 'Administrador', { size: 36 })}
+              <div class="meta"><div class="nome">${esc(ctx.usuario?.name || 'Administrador')}</div>
+                <div class="papel admin">admin</div></div>
+              <button class="chip-logout" title="Sair">${ico('logout', { size: 20 })}</button>
+            </div>`
+          : `<button class="btn-login-side">${ico('lock', { size: 18 })} Entrar como admin</button>`
+      }
+    </div>`;
+
+  el.querySelectorAll('.nav-item').forEach((b) =>
+    b.addEventListener('click', () => ctx.navegar(b.dataset.view)),
+  );
+  el.querySelector('.chip-logout')?.addEventListener('click', ctx.sair);
+  el.querySelector('.btn-login-side')?.addEventListener('click', ctx.entrar);
+}

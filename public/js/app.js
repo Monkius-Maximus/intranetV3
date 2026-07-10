@@ -1,81 +1,141 @@
 import { api, clearToken, getToken, setToken } from './core/api.js';
-import { esc } from './core/dom.js';
-import { renderNavbar } from './componentes/navbar.js';
-import { renderAvisos } from './componentes/avisos.js';
-import { renderContatos } from './componentes/contatos.js';
-import { renderAniversariantes } from './componentes/aniversariantes.js';
-import { renderLinks } from './componentes/links.js';
+import { avatar, esc, ico } from './core/ui.js';
+import { renderSidebar } from './componentes/sidebar.js';
+import { renderDashboard } from './componentes/dashboard.js';
+import { renderComunicados, renderNovoComunicado } from './componentes/avisos.js';
+import { renderPessoas } from './componentes/contatos.js';
 
 const appEl = document.querySelector('#app');
-let usuario = null;
-const isAdmin = () => usuario?.role === 'admin';
 
-function layout() {
-  return `
-    <header class="topbar">
-      <span class="brand">Intranet SEPLAG</span>
-      <nav id="menus" class="menus"></nav>
-      <span class="conta">${
-        isAdmin()
-          ? `${esc(usuario.name)} · admin <button id="logout">Sair</button>`
-          : `<button id="entrar">Entrar (admin)</button>`
-      }</span>
-    </header>
-    <main class="content">
-      <section class="panel" id="sec-avisos"></section>
-      <section class="panel" id="sec-contatos"></section>
-      <section class="panel" id="sec-aniv"></section>
-      <section class="panel" id="sec-links"></section>
-    </main>`;
-}
+const state = {
+  usuario: null,
+  view: 'inicio',
+  params: {},
+  setores: [],
+};
 
-// Cada módulo da home é um componente independente que busca e desenha a si
-// mesmo. app.js só monta o layout e define a ordem (espelhando o Seplagnet).
-async function render() {
-  const setores = await api('/setores');
-  appEl.innerHTML = layout();
+const isAdmin = () => state.usuario?.role === 'admin';
 
-  const sair = () => {
-    clearToken();
-    usuario = null;
-    render();
-  };
-  const secAniv = appEl.querySelector('#sec-aniv');
-  const secLinks = appEl.querySelector('#sec-links');
-  const ctx = {
+// Views que só o admin acessa; se pedidas sem sessão, caem no início.
+const VIEWS_ADMIN = new Set(['usuarios', 'gerenciar-comunicados', 'novo-comunicado']);
+
+function montarCtx() {
+  return {
     admin: isAdmin(),
-    setores,
+    usuario: state.usuario,
+    view: state.view,
+    setores: state.setores,
+    buscaInicial: state.params.busca || '',
+    navegar,
     sair,
-    aoMudarPessoas: () => renderAniversariantes(secAniv, ctx),
-    aoMudarNavegacao: () => renderLinks(secLinks, ctx),
+    entrar: () => renderLogin(),
+    // callbacks para manter a home coerente após mutações
+    aoMudarPessoas: () => {},
+    aoMudarAvisos: () => {},
   };
-
-  if (isAdmin()) appEl.querySelector('#logout').addEventListener('click', sair);
-  else appEl.querySelector('#entrar').addEventListener('click', renderLogin);
-
-  await Promise.all([
-    renderNavbar(appEl.querySelector('#menus'), ctx),
-    renderAvisos(appEl.querySelector('#sec-avisos'), ctx),
-    renderContatos(appEl.querySelector('#sec-contatos'), ctx),
-    renderAniversariantes(secAniv, ctx),
-    renderLinks(secLinks, ctx),
-  ]);
 }
 
+function navegar(view, params = {}) {
+  if (VIEWS_ADMIN.has(view) && !isAdmin()) view = 'inicio';
+  state.view = view;
+  state.params = params;
+  renderShell();
+}
+
+function sair() {
+  clearToken();
+  state.usuario = null;
+  state.view = 'inicio';
+  state.params = {};
+  renderShell();
+}
+
+function renderShell() {
+  const ctx = montarCtx();
+  appEl.innerHTML = `
+    <div class="shell ${ctx.admin ? 'is-admin' : ''}">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="main">
+        <header class="topbar" id="topbar"></header>
+        <div class="view" id="view"></div>
+      </div>
+    </div>`;
+
+  renderSidebar(document.getElementById('sidebar'), ctx);
+  renderTopbar(document.getElementById('topbar'), ctx);
+  renderView(document.getElementById('view'), ctx);
+}
+
+function renderTopbar(el, ctx) {
+  el.innerHTML = `
+    <div class="search">
+      ${ico('search', { size: 20, color: '#8a94a0' })}
+      <input id="topbusca" placeholder="Buscar comunicados, sistemas, pessoas…" />
+    </div>
+    <div class="topbar-spacer"></div>
+    ${
+      ctx.admin
+        ? `<button class="icon-btn" title="Notificações">${ico('notifications', {
+            size: 21,
+          })}<span class="dot"></span></button>
+           ${avatar(ctx.usuario?.name || 'Administrador', { size: 40 })}`
+        : `<button class="icon-btn ir-ramais" title="Ramais">${ico('contacts', { size: 21 })}</button>
+           <button class="btn-entrar">${ico('lock', { size: 17 })} Entrar (admin)</button>`
+    }`;
+
+  const busca = el.querySelector('#topbusca');
+  busca.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && busca.value.trim()) navegar('ramais', { busca: busca.value.trim() });
+  });
+  el.querySelector('.btn-entrar')?.addEventListener('click', () => renderLogin());
+  el.querySelector('.ir-ramais')?.addEventListener('click', () => navegar('ramais'));
+}
+
+function renderView(el, ctx) {
+  switch (state.view) {
+    case 'comunicados':
+      return renderComunicados(el, ctx, { manage: false });
+    case 'gerenciar-comunicados':
+      return renderComunicados(el, ctx, { manage: true });
+    case 'ramais':
+      return renderPessoas(el, ctx, { manage: false });
+    case 'usuarios':
+      return renderPessoas(el, ctx, { manage: true });
+    case 'novo-comunicado':
+      return renderNovoComunicado(el, ctx, { editar: state.params.editar || null });
+    case 'inicio':
+    default:
+      return renderDashboard(el, ctx);
+  }
+}
+
+// ------------------------------------------------------------------ login
 function renderLogin(msg = '') {
   appEl.innerHTML = `
-    <main class="card">
-      <h1>Intranet SEPLAG</h1>
-      <p class="subtitle">Entrar como administrador</p>
-      <form id="f-login">
-        <label>E-mail<input name="email" autocomplete="username" required /></label>
-        <label>Senha<input name="senha" type="password" autocomplete="current-password" required /></label>
-        <button type="submit">Entrar</button>
-        <button type="button" id="voltar" class="secundario">Voltar ao diretório</button>
-        ${msg ? `<p class="error">${esc(msg)}</p>` : ''}
-      </form>
-    </main>`;
-  appEl.querySelector('#voltar').addEventListener('click', () => render());
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-brand">
+          <div class="brand-mark">SP</div>
+          <div><h1>Intranet SEPLAG</h1><p class="subtitle">Entrar como administrador</p></div>
+        </div>
+        <form class="login-form" id="f-login">
+          <div><label>E-mail</label>
+            <input name="email" autocomplete="username" placeholder="admin@intranet.local" required /></div>
+          <div><label>Senha</label>
+            <input name="senha" type="password" autocomplete="current-password" placeholder="••••••••" required /></div>
+          ${msg ? `<p class="login-error">${esc(msg)}</p>` : ''}
+          <div class="login-actions">
+            <button type="submit" class="btn btn-primary">Entrar</button>
+            <button type="button" class="btn btn-ghost" id="voltar">Voltar ao diretório</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+
+  appEl.querySelector('#voltar').addEventListener('click', () => {
+    state.view = 'inicio';
+    renderShell();
+  });
   appEl.querySelector('#f-login').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -85,23 +145,30 @@ function renderLogin(msg = '') {
         body: JSON.stringify({ email: fd.get('email'), senha: fd.get('senha') }),
       });
       setToken(r.token);
-      usuario = r.user;
-      await render();
+      state.usuario = r.user;
+      state.view = 'inicio';
+      renderShell();
     } catch (err) {
       renderLogin(err.message);
     }
   });
 }
 
+// ------------------------------------------------------------------- boot
 async function boot() {
   if (getToken()) {
     try {
-      usuario = await api('/auth/me');
+      state.usuario = await api('/auth/me');
     } catch {
-      usuario = null;
+      state.usuario = null;
     }
   }
-  await render();
+  try {
+    state.setores = await api('/setores');
+  } catch {
+    state.setores = [];
+  }
+  renderShell();
 }
 
 boot();

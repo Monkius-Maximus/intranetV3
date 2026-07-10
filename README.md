@@ -113,9 +113,10 @@ src/
   http/        pessoas · avisos · navegacao · setores · auth · health · app   (1 rota por módulo)
   auth.ts · config.ts · seed.ts · index.ts
 public/js/
-  core/        api · dom
-  componentes/ navbar · avisos · contatos · aniversariantes · links   (componentes independentes)
-  app.js       monta o layout (ordem dos módulos)
+  core/        api · dom · ui   (cliente HTTP · escape/XSS · ícones, avatares, datas)
+  componentes/ sidebar · dashboard · avisos · contatos · aniversariantes · links
+  app.js       shell (sidebar + topbar) · roteamento de views · login do admin
+public/fonts/  material-symbols-rounded.woff2   (ícones — subconjunto local, sem CDN)
 scripts/       importar-aniversariantes · importar-funcionarios · backup · doctor
 data/          banco JSON + segredo JWT   (NÃO versionado — LGPD)
 ```
