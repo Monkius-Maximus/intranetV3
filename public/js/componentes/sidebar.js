@@ -8,6 +8,7 @@ const ITENS = [
   { key: 'inicio', label: 'Início', icon: 'home' },
   { key: 'comunicados', label: 'Comunicados', icon: 'campaign' },
   { key: 'ramais', label: 'Ramais', icon: 'contacts' },
+  { key: 'aniversariantes', label: 'Aniversariantes', icon: 'cake' },
 ];
 const ITENS_ADMIN = [
   { key: 'usuarios', label: 'Usuários', icon: 'group' },

@@ -12,7 +12,9 @@ export function montarAvisos(repo: Repositorio): Router {
   });
 
   r.post('/', autenticar, exigirAdmin, validar(criarAvisoSchema), async (req: AuthedRequest, res) => {
-    res.status(201).json(await repo.avisos.criar({ ...req.body, createdBy: req.user!.sub }));
+    res
+      .status(201)
+      .json(await repo.avisos.criar({ ...req.body, createdBy: req.user!.sub, autor: req.user!.name ?? null }));
   });
 
   r.put('/:id', autenticar, exigirAdmin, validar(atualizarAvisoSchema), async (req, res) => {

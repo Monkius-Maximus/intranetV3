@@ -127,12 +127,14 @@ export class RepositorioJson implements Repositorio {
       [...this.doc.avisos].sort(
         (a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt),
       ),
-    criar: async (dados: DadosNovoAviso & { createdBy: number | null }) => {
+    criar: async (dados: DadosNovoAviso & { createdBy: number | null; autor: string | null }) => {
       const a: Aviso = {
         id: this.proximoId('avisos'),
         title: dados.title,
         body: dados.body,
         pinned: Boolean(dados.pinned),
+        categoria: dados.categoria,
+        autor: dados.autor,
         createdBy: dados.createdBy,
         createdAt: new Date().toISOString(),
       };

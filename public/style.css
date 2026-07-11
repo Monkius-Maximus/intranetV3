@@ -451,6 +451,16 @@ button {
   border-radius: 5px;
   letter-spacing: 0.02em;
 }
+.tag-categoria {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cat-cor, var(--brand));
+  background: color-mix(in srgb, var(--cat-cor, var(--brand)) 11%, #fff);
+  padding: 3px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
 .aviso-date {
   font-size: 12px;
   color: var(--faint);
@@ -1198,23 +1208,6 @@ button {
   min-height: 220px;
   color: var(--text);
 }
-.dropzone {
-  border: 1.5px dashed var(--field-border);
-  border-radius: 9px;
-  padding: 20px;
-  text-align: center;
-  background: #fbfcfd;
-  color: var(--muted);
-}
-.dropzone .big {
-  font-size: 13px;
-  margin-top: 6px;
-}
-.dropzone .small {
-  font-size: 12px;
-  color: var(--faint);
-  margin-top: 3px;
-}
 .side-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -1245,6 +1238,55 @@ button {
   color: var(--muted-2);
   font-size: 14px;
   padding: 8px 0;
+}
+
+/* -------------------------------------------------- aniversariantes (mês) */
+.aniv-mes {
+  padding: 6px 0;
+}
+.aniv-mes-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 18px;
+  border-bottom: 1px solid #f1f3f6;
+  font-size: 14px;
+}
+.aniv-mes-row:last-child {
+  border-bottom: none;
+}
+.aniv-mes-row .dia {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand);
+  min-width: 30px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+.aniv-mes-row .nome {
+  font-weight: 600;
+  min-width: 0;
+}
+.aniv-mes-row .setor {
+  margin-left: auto;
+  color: var(--muted-2);
+  font-size: 13px;
+  text-align: right;
+}
+.aniv-mes-row.is-hoje {
+  background: #fdf6f9;
+}
+.aniv-mes-row.is-hoje .dia {
+  color: var(--pink);
+}
+.tag-hoje {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pink);
+  background: #fde8ef;
+  padding: 2px 8px;
+  border-radius: 5px;
+  margin-left: 6px;
 }
 
 /* ------------------------------------------------------------- login */

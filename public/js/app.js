@@ -4,6 +4,7 @@ import { renderSidebar } from './componentes/sidebar.js';
 import { renderDashboard } from './componentes/dashboard.js';
 import { renderComunicados, renderNovoComunicado } from './componentes/avisos.js';
 import { renderPessoas } from './componentes/contatos.js';
+import { renderAniversariantesPagina } from './componentes/aniversariantes.js';
 
 const appEl = document.querySelector('#app');
 
@@ -70,7 +71,7 @@ function renderTopbar(el, ctx) {
   el.innerHTML = `
     <div class="search">
       ${ico('search', { size: 20, color: '#8a94a0' })}
-      <input id="topbusca" placeholder="Buscar comunicados, sistemas, pessoas…" />
+      <input id="topbusca" placeholder="Buscar pessoas, setores, ramais…  (Enter)" />
     </div>
     <div class="topbar-spacer"></div>
     ${
@@ -99,6 +100,8 @@ function renderView(el, ctx) {
       return renderComunicados(el, ctx, { manage: true });
     case 'ramais':
       return renderPessoas(el, ctx, { manage: false });
+    case 'aniversariantes':
+      return renderAniversariantesPagina(el, ctx);
     case 'usuarios':
       return renderPessoas(el, ctx, { manage: true });
     case 'novo-comunicado':

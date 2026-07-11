@@ -34,7 +34,7 @@ export interface RepoDepartamentos {
 
 export interface RepoAvisos {
   listar(): Promise<Aviso[]>;
-  criar(dados: DadosNovoAviso & { createdBy: number | null }): Promise<Aviso>;
+  criar(dados: DadosNovoAviso & { createdBy: number | null; autor: string | null }): Promise<Aviso>;
   atualizar(id: number, patch: PatchAviso): Promise<Aviso>;
   remover(id: number): Promise<Aviso>;
 }

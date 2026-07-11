@@ -2,22 +2,30 @@ import { api } from '../core/api.js';
 import { acaoAdmin } from '../core/dom.js';
 import { dataAviso, esc, ico } from '../core/ui.js';
 
-// Paleta das bordas dos cards de comunicado (color-coded, herdado do 1c).
-const ACCENTS = ['#1e73be', '#c46a12', '#1f8a52', '#6b3fd1', '#b23c6e', '#0f7a86'];
-const accentDe = (a, i) => (a.pinned ? '#1e73be' : ACCENTS[i % ACCENTS.length]);
+// Categorias de comunicado: rótulo + cor do color-coding (herdado do 1c).
+// A categoria vem do banco; o fallback 'geral' cobre registros antigos.
+export const CATEGORIAS = {
+  geral: { label: 'Geral', cor: '#1e73be' },
+  ti: { label: 'TI', cor: '#6b3fd1' },
+  rh: { label: 'RH', cor: '#1f8a52' },
+  urgente: { label: 'Urgente', cor: '#c0393e' },
+};
+const categoriaDe = (a) => CATEGORIAS[a.categoria] || CATEGORIAS.geral;
 
-function cardComunicado(a, i, ctx) {
+function cardComunicado(a, ctx) {
+  const cat = categoriaDe(a);
   const acoes = ctx.admin
     ? `<div class="aviso-actions">
         <button class="icon-square edit-aviso" data-id="${a.id}" title="Editar">${ico('edit', { size: 18 })}</button>
         <button class="icon-square danger del-aviso" data-id="${a.id}" title="Excluir">${ico('delete', { size: 18 })}</button>
       </div>`
     : '';
-  return `<article class="aviso-card" style="--aviso-accent:${accentDe(a, i)}">
+  return `<article class="aviso-card" style="--aviso-accent:${cat.cor}">
     <div class="aviso-top">
       <div style="min-width:0">
         <div class="aviso-tags">
           ${a.pinned ? '<span class="tag-fixado">FIXADO</span>' : ''}
+          <span class="tag-categoria" style="--cat-cor:${cat.cor}">${esc(cat.label)}</span>
           <span class="aviso-date">${esc(dataAviso(a.createdAt))}</span>
         </div>
         <h3>${esc(a.title)}</h3>
@@ -56,7 +64,7 @@ export async function renderComunicadosPreview(el, ctx) {
   el.innerHTML =
     itens.length === 0
       ? '<p class="empty">Nenhum comunicado.</p>'
-      : itens.slice(0, 2).map((a, i) => cardComunicado(a, i, ctx)).join('');
+      : itens.slice(0, 2).map((a) => cardComunicado(a, ctx)).join('');
   ligarAcoes(el, itens, ctx, () => renderComunicadosPreview(el, ctx));
 }
 
@@ -79,20 +87,19 @@ export async function renderComunicados(el, ctx, { manage = true } = {}) {
       }
     </div>
     <div class="col" id="lista-avisos">
-      ${itens.length === 0 ? '<p class="empty">Nenhum comunicado.</p>' : itens.map((a, i) => cardComunicado(a, i, c)).join('')}
+      ${itens.length === 0 ? '<p class="empty">Nenhum comunicado.</p>' : itens.map((a) => cardComunicado(a, c)).join('')}
     </div>`;
 
   el.querySelector('.novo-aviso')?.addEventListener('click', () => ctx.navegar('novo-comunicado'));
   ligarAcoes(el.querySelector('#lista-avisos'), itens, c, () => renderComunicados(el, ctx, { manage }));
 }
 
-// Tela "Novo comunicado" (3c). Backend suporta título, conteúdo e "fixar";
-// público-alvo, categoria, anexos, notificação e agendamento ficam como campos
-// visuais do protótipo (ainda não persistidos pela API).
+// Tela "Novo comunicado" (3c): título, conteúdo, categoria (color-coding) e
+// "fixar" são persistidos pela API. Publicação é sempre imediata e para todos.
 export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
   const edicao = Boolean(editar);
   let fixar = editar ? Boolean(editar.pinned) : true;
-  let notificar = false;
+  const categoriaInicial = editar?.categoria && CATEGORIAS[editar.categoria] ? editar.categoria : 'geral';
 
   el.innerHTML = `
     <div class="crumbs">
@@ -126,26 +133,22 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
             }</textarea>
           </div>
         </div>
-        <div class="field">
-          <label>Anexos</label>
-          <div class="dropzone">
-            ${ico('upload_file', { size: 26, color: 'var(--faint)' })}
-            <div class="big">Arraste arquivos ou <strong style="color:var(--navy)">selecione</strong></div>
-            <div class="small">PDF, DOCX ou imagens até 10 MB</div>
-          </div>
-        </div>
       </div>
 
       <aside class="editor-col">
         <div class="side-card">
           <div class="title">Publicação</div>
-          <div class="field" style="margin-bottom:14px">
-            <div class="lbl" style="font-size:12px;color:var(--muted-2)">Público-alvo</div>
-            <select><option>Todos os servidores</option><option>Por setor</option></select>
-          </div>
           <div class="field" style="margin-bottom:16px">
             <div class="lbl" style="font-size:12px;color:var(--muted-2)">Categoria</div>
-            <select><option>Geral</option><option>TI</option><option>RH</option><option>Urgente</option></select>
+            <select id="c-categoria">
+              ${Object.entries(CATEGORIAS)
+                .map(
+                  ([k, c]) =>
+                    `<option value="${k}" ${k === categoriaInicial ? 'selected' : ''}>${esc(c.label)}</option>`,
+                )
+                .join('')}
+            </select>
+            <div class="hint">Define a cor do comunicado na lista</div>
           </div>
           <div class="switch-row" style="border-top:1px solid var(--line);padding-top:12px">
             <div class="st" style="display:flex;align-items:center;gap:8px">${ico('push_pin', {
@@ -153,13 +156,6 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
               color: 'var(--amber)',
             })} Fixar no topo</div>
             <button type="button" class="switch ${fixar ? 'is-on' : ''}" id="sw-fixar"></button>
-          </div>
-          <div class="switch-row" style="padding-top:8px">
-            <div class="st" style="display:flex;align-items:center;gap:8px">${ico('notifications', {
-              size: 18,
-              color: 'var(--brand)',
-            })} Notificar por e-mail</div>
-            <button type="button" class="switch ${notificar ? 'is-on' : ''}" id="sw-notif"></button>
           </div>
         </div>
         <div class="side-card">
@@ -179,14 +175,9 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
     </div>`;
 
   const swFixar = el.querySelector('#sw-fixar');
-  const swNotif = el.querySelector('#sw-notif');
   swFixar.addEventListener('click', () => {
     fixar = !fixar;
     swFixar.classList.toggle('is-on', fixar);
-  });
-  swNotif.addEventListener('click', () => {
-    notificar = !notificar;
-    swNotif.classList.toggle('is-on', notificar);
   });
 
   const voltar = () => ctx.navegar(ctx.admin ? 'gerenciar-comunicados' : 'comunicados');
@@ -201,7 +192,8 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
       return;
     }
     acaoAdmin(ctx, async () => {
-      const corpo = JSON.stringify({ title, body, pinned: fixar });
+      const categoria = el.querySelector('#c-categoria').value;
+      const corpo = JSON.stringify({ title, body, pinned: fixar, categoria });
       if (edicao) await api(`/avisos/${editar.id}`, { method: 'PUT', body: corpo });
       else await api('/avisos', { method: 'POST', body: corpo });
       ctx.aoMudarAvisos?.();

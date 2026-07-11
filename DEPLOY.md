@@ -33,9 +33,9 @@ cadastrar no DNS, se quiser um nome amigável.
 
 ### Manter no ar
 
-- **Linux (opcional, recomendado):** um serviço systemd que roda
-  `npm start` no diretório do app, com `Restart=on-failure`. (Um processo só;
-  nada além disto.)
+- **Linux (opcional, recomendado):** um serviço systemd com `Restart=on-failure`
+  — há um pronto em [`deploy/intranet.service`](deploy/intranet.service), com as
+  instruções de instalação no cabeçalho.
 - **Windows:** o Agendador de Tarefas (ao iniciar) ou uma ferramenta como
   `nssm` para rodar `npm start` como serviço.
 - **Rápido/temporário:** `npm start` numa sessão que fique aberta.

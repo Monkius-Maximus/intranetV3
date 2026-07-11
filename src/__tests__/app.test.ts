@@ -137,8 +137,10 @@ describe('Avisos', () => {
     const criado = await request(app)
       .post('/api/avisos')
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Título original', body: 'Corpo original', pinned: true });
+      .send({ title: 'Título original', body: 'Corpo original', pinned: true, categoria: 'ti' });
     expect(criado.status).toBe(201);
+    expect(criado.body.categoria).toBe('ti');
+    expect(criado.body.autor).toBe('Administrador'); // nome de quem publicou (do token)
 
     const editado = await request(app)
       .put(`/api/avisos/${criado.body.id}`)
@@ -148,8 +150,25 @@ describe('Avisos', () => {
     expect(editado.body.body).toBe('Corpo revisado');
     expect(editado.body.title).toBe('Título original'); // preservado
     expect(editado.body.pinned).toBe(true); // preservado
+    expect(editado.body.categoria).toBe('ti'); // preservado
     expect(editado.body.id).toBe(criado.body.id); // mesmo registro
     expect(editado.body.createdAt).toBe(criado.body.createdAt);
+  });
+
+  it('categoria inválida é rejeitada; ausente assume "geral"', async () => {
+    const token = await loginAdmin();
+    const invalida = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'X', body: 'Y', categoria: 'inexistente' });
+    expect(invalida.status).toBe(422); // validação Zod (ver http/util.ts)
+
+    const semCategoria = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Sem categoria', body: 'corpo' });
+    expect(semCategoria.status).toBe(201);
+    expect(semCategoria.body.categoria).toBe('geral');
   });
 
   it('PUT sem token é 401; id inexistente é 404', async () => {
