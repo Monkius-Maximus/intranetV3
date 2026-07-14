@@ -9,6 +9,7 @@ export interface TokenPayload {
   email: string;
   role: Papel;
   name: string;
+  mcp?: boolean; // troca de senha pendente: só pode trocar a senha até resolver
 }
 
 export function hashPassword(senha: string): string {
@@ -48,6 +49,10 @@ export function autenticar(req: AuthedRequest, res: Response, next: NextFunction
 export function exigirAdmin(req: AuthedRequest, res: Response, next: NextFunction): void {
   if (req.user?.role !== 'admin') {
     res.status(403).json({ erro: 'acesso restrito a administradores' });
+    return;
+  }
+  if (req.user.mcp) {
+    res.status(403).json({ erro: 'troca de senha pendente — defina uma nova senha antes de continuar' });
     return;
   }
   next();

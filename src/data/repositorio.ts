@@ -50,10 +50,17 @@ export interface RepoNavegacao {
   contarGrupos(): Promise<number>;
 }
 
+// Criação de conta: ativo/mustChangePassword têm padrão (true/false).
+export type DadosNovoUsuario = Omit<Usuario, 'id' | 'ativo' | 'mustChangePassword'> &
+  Partial<Pick<Usuario, 'ativo' | 'mustChangePassword'>>;
+
 export interface RepoUsuarios {
+  listar(): Promise<Usuario[]>;
   porEmail(email: string): Promise<Usuario | undefined>;
   obter(id: number): Promise<Usuario | undefined>;
-  criar(dados: Omit<Usuario, 'id'>): Promise<Usuario>;
+  criar(dados: DadosNovoUsuario): Promise<Usuario>;
+  atualizar(id: number, patch: Partial<Omit<Usuario, 'id'>>): Promise<Usuario>;
+  remover(id: number): Promise<Usuario>;
   contar(): Promise<number>;
 }
 

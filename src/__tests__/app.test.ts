@@ -214,6 +214,115 @@ describe('Navegação dirigida por banco', () => {
   });
 });
 
+describe('Contas de acesso', () => {
+  it('admin cria conta; com troca pendente não escreve; após trocar a senha, escreve', async () => {
+    const token = await loginAdmin();
+    const criada = await request(app)
+      .post('/api/contas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Chefe do Setor', email: 'chefe@test.local', senha: 'senha-inicial-1' });
+    expect(criada.status).toBe(201);
+    expect(JSON.stringify(criada.body)).not.toContain('passwordHash');
+    expect(criada.body.mustChangePassword).toBe(true); // padrão seguro
+
+    const login1 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'chefe@test.local', senha: 'senha-inicial-1' });
+    expect(login1.status).toBe(200);
+    expect(login1.body.user.mustChangePassword).toBe(true);
+
+    // escrita bloqueada enquanto a troca estiver pendente
+    const bloqueada = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${login1.body.token}`)
+      .send({ title: 'X', body: 'Y' });
+    expect(bloqueada.status).toBe(403);
+
+    // troca a senha → token novo → escrita liberada, com autoria correta
+    const troca = await request(app)
+      .post('/api/auth/senha')
+      .set('Authorization', `Bearer ${login1.body.token}`)
+      .send({ senhaAtual: 'senha-inicial-1', novaSenha: 'senha-definitiva-2' });
+    expect(troca.status).toBe(200);
+    const liberada = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${troca.body.token}`)
+      .send({ title: 'Do chefe', body: 'Publicado após trocar a senha' });
+    expect(liberada.status).toBe(201);
+    expect(liberada.body.autor).toBe('Chefe do Setor');
+  });
+
+  it('e-mail duplicado é 409', async () => {
+    const token = await loginAdmin();
+    const r = await request(app)
+      .post('/api/contas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Outro', email: 'CHEFE@test.local', senha: 'qualquer-senha-8' });
+    expect(r.status).toBe(409);
+  });
+
+  it('protege o último admin ativo e a própria conta', async () => {
+    const token = await loginAdmin();
+    const contas = (await request(app).get('/api/contas').set('Authorization', `Bearer ${token}`)).body;
+    const eu = contas.find((c: { email: string }) => c.email === 'admin@test.local');
+    const chefe = contas.find((c: { email: string }) => c.email === 'chefe@test.local');
+
+    // rebaixa o chefe para leitor (permitido: ainda sobra o admin principal)
+    const rebaixa = await request(app)
+      .put(`/api/contas/${chefe.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role: 'viewer' });
+    expect(rebaixa.status).toBe(200);
+
+    // agora o admin principal é o ÚLTIMO admin ativo: não pode ser rebaixado,
+    // desativado nem excluído
+    expect(
+      (await request(app).put(`/api/contas/${eu.id}`).set('Authorization', `Bearer ${token}`).send({ role: 'viewer' }))
+        .status,
+    ).toBe(409);
+    expect(
+      (await request(app).put(`/api/contas/${eu.id}`).set('Authorization', `Bearer ${token}`).send({ ativo: false }))
+        .status,
+    ).toBe(409);
+    expect(
+      (await request(app).delete(`/api/contas/${eu.id}`).set('Authorization', `Bearer ${token}`)).status,
+    ).toBe(409); // também é a própria conta
+  });
+
+  it('5 senhas erradas bloqueiam o login por 15 min (mesmo com a senha certa)', async () => {
+    const token = await loginAdmin();
+    await request(app)
+      .post('/api/contas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Conta Bloqueável', email: 'bloqueio@test.local', senha: 'senha-valida-8', mustChangePassword: false });
+
+    for (let i = 0; i < 5; i++) {
+      const r = await request(app).post('/api/auth/login').send({ email: 'bloqueio@test.local', senha: 'errada' });
+      expect(r.status).toBe(401);
+    }
+    const bloqueado = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'bloqueio@test.local', senha: 'senha-valida-8' });
+    expect(bloqueado.status).toBe(429);
+  });
+
+  it('conta desativada não loga', async () => {
+    const token = await loginAdmin();
+    const criada = await request(app)
+      .post('/api/contas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Desativada', email: 'desativada@test.local', senha: 'senha-valida-8', mustChangePassword: false });
+    await request(app)
+      .put(`/api/contas/${criada.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ativo: false });
+    const r = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'desativada@test.local', senha: 'senha-valida-8' });
+    expect(r.status).toBe(401);
+  });
+});
+
 describe('Segurança', () => {
   it('o banco NÃO é servido por HTTP', async () => {
     for (const p of ['/data/intranet.json', '/../data/intranet.json', '/data/jwt-secret.key']) {

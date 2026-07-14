@@ -11,8 +11,9 @@ const ITENS = [
   { key: 'aniversariantes', label: 'Aniversariantes', icon: 'cake' },
 ];
 const ITENS_ADMIN = [
-  { key: 'usuarios', label: 'Usuários', icon: 'group' },
+  { key: 'usuarios', label: 'Pessoas', icon: 'group' },
   { key: 'gerenciar-comunicados', label: 'Gerenciar comunicados', icon: 'edit_note' },
+  { key: 'contas', label: 'Contas de acesso', icon: 'shield_person' },
 ];
 
 // A view atual pode não ser exatamente a chave do menu (ex.: novo-comunicado
@@ -48,7 +49,8 @@ export function renderSidebar(el, ctx) {
           ? `<div class="user-chip">
               ${avatar(ctx.usuario?.name || 'Administrador', { size: 36 })}
               <div class="meta"><div class="nome">${esc(ctx.usuario?.name || 'Administrador')}</div>
-                <div class="papel admin">admin</div></div>
+                <div class="papel admin">${ctx.usuario?.role === 'admin' ? 'admin' : 'leitura'}</div></div>
+              <button class="chip-logout trocar-senha" title="Trocar senha">${ico('key', { size: 19 })}</button>
               <button class="chip-logout" title="Sair">${ico('logout', { size: 20 })}</button>
             </div>`
           : `<button class="btn-login-side">${ico('lock', { size: 18 })} Entrar como admin</button>`
@@ -58,6 +60,7 @@ export function renderSidebar(el, ctx) {
   el.querySelectorAll('.nav-item').forEach((b) =>
     b.addEventListener('click', () => ctx.navegar(b.dataset.view)),
   );
-  el.querySelector('.chip-logout')?.addEventListener('click', ctx.sair);
+  el.querySelector('.trocar-senha')?.addEventListener('click', ctx.trocarSenha);
+  el.querySelector('.chip-logout:not(.trocar-senha)')?.addEventListener('click', ctx.sair);
   el.querySelector('.btn-login-side')?.addEventListener('click', ctx.entrar);
 }

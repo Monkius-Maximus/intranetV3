@@ -35,7 +35,7 @@ export async function renderDashboard(el, ctx) {
     ctx.admin ? api('/pessoas').catch(() => []) : Promise.resolve([]),
   ]);
 
-  const nome = ctx.admin ? 'Administrador' : ctx.usuario?.name || '';
+  const nome = ctx.usuario?.name || (ctx.admin ? 'Administrador' : '');
   const subAdmin = 'Você tem permissões de gestão neste ambiente';
   const subUser = `${dataLonga()} — ${avisos.length} comunicado${avisos.length === 1 ? '' : 's'}`;
 
@@ -111,7 +111,7 @@ export async function renderDashboard(el, ctx) {
         <div class="mini-stat"><div class="n">${pessoas.length}</div><div class="l">Pessoas</div></div>
         <div class="mini-stat"><div class="n">${avisos.length}</div><div class="l">Comunicados</div></div>
       </div>
-      <button class="mini-action ir-usuarios">${ico('group', { size: 18 })} Gerenciar usuários ${ico('chevron_right', {
+      <button class="mini-action ir-usuarios">${ico('group', { size: 18 })} Gerenciar pessoas ${ico('chevron_right', {
       size: 17,
       cls: 'chev',
     })}</button>`;

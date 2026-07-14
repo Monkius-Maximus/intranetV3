@@ -25,6 +25,13 @@ async function main(): Promise<void> {
   if (registros.length === 0) {
     console.error(`Nenhum registro reconhecido em ${arquivo}.`);
     console.error('Formato esperado: cabeçalhos "Aniversariantes do mês de <Mês>" + linhas dia|nome|setor.');
+    if (avisos.length > 0) {
+      // Mostra O QUE o leitor viu — sem isto, é impossível diagnosticar à distância.
+      console.error(`\nO que encontrei no arquivo (${avisos.length} linha(s) não reconhecida(s)):`);
+      for (const a of avisos.slice(0, 12)) console.error(`  - ${a}`);
+    }
+    console.error('\nPlano B: salve a planilha como CSV (nome;setor;dia;mes) e use:');
+    console.error('  npm run importar-csv -- <arquivo.csv>');
     process.exit(1);
   }
 

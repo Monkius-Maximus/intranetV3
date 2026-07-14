@@ -51,14 +51,24 @@ export async function mesclarPessoas(
       birthMonth: reg.birthMonth,
     };
 
+    // Enriquecimento vindo da origem (ex.: CSV com e-mail/ramal): aplica só
+    // onde estiver vazio — o que o admin preencheu tem precedência.
+    const preencherVazios = (p: Pessoa): void => {
+      if (reg.email && !p.email) p.email = reg.email;
+      if (reg.phoneExtension && !p.phoneExtension) p.phoneExtension = reg.phoneExtension;
+      if (reg.cargo && !p.cargo) p.cargo = reg.cargo;
+    };
+
     const k = chave(reg);
     const atual = porChave.get(k);
     if (atual) {
       Object.assign(atual, nucleo, { fonte: origem }); // só núcleo; enriquecimento intacto
+      preencherVazios(atual);
       tocados.add(atual.id);
       atualizados += 1;
     } else {
       const nova: Pessoa = { ...pessoaVazia(), ...nucleo, fonte: origem, id: ++maxId };
+      preencherVazios(nova);
       porChave.set(k, nova);
       tocados.add(nova.id);
       novos += 1;

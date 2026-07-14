@@ -14,6 +14,7 @@
     "test": "vitest run",
     "importar-funcionarios": "tsx scripts/importar-funcionarios.ts",
     "importar-aniversariantes": "tsx scripts/importar-aniversariantes.ts",
+    "importar-csv": "tsx scripts/importar-csv.ts",
     "backup": "tsx scripts/backup.ts",
     "doctor": "node scripts/doctor.cjs"
   },

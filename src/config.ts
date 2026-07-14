@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,6 +47,20 @@ function carregarSegredo(): string {
     // Em alguns sistemas de arquivos o chmod pode não se aplicar; ignora.
   }
   return segredo;
+}
+
+// Sonda de escrita: cria e apaga um arquivo em data/. Retorna null se OK,
+// ou a mensagem do erro. Usada no boot (falha cedo e claro) e no /api/health.
+export function sondaDeEscrita(): string | null {
+  try {
+    garantirDir(DATA_DIR);
+    const probe = join(DATA_DIR, `.sonda-${process.pid}`);
+    writeFileSync(probe, 'ok');
+    rmSync(probe);
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
 }
 
 export const config = {

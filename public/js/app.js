@@ -5,6 +5,7 @@ import { renderDashboard } from './componentes/dashboard.js';
 import { renderComunicados, renderNovoComunicado } from './componentes/avisos.js';
 import { renderPessoas } from './componentes/contatos.js';
 import { renderAniversariantesPagina } from './componentes/aniversariantes.js';
+import { abrirTrocaDeSenha, renderContas } from './componentes/contas.js';
 
 const appEl = document.querySelector('#app');
 
@@ -18,7 +19,7 @@ const state = {
 const isAdmin = () => state.usuario?.role === 'admin';
 
 // Views que só o admin acessa; se pedidas sem sessão, caem no início.
-const VIEWS_ADMIN = new Set(['usuarios', 'gerenciar-comunicados', 'novo-comunicado']);
+const VIEWS_ADMIN = new Set(['usuarios', 'gerenciar-comunicados', 'novo-comunicado', 'contas']);
 
 function montarCtx() {
   return {
@@ -30,6 +31,14 @@ function montarCtx() {
     navegar,
     sair,
     entrar: () => renderLogin(),
+    trocarSenha: () =>
+      abrirTrocaDeSenha({
+        aoTrocar: (r) => {
+          setToken(r.token);
+          state.usuario = r.user;
+          renderShell();
+        },
+      }),
     // callbacks para manter a home coerente após mutações
     aoMudarPessoas: () => {},
     aoMudarAvisos: () => {},
@@ -104,6 +113,8 @@ function renderView(el, ctx) {
       return renderAniversariantesPagina(el, ctx);
     case 'usuarios':
       return renderPessoas(el, ctx, { manage: true });
+    case 'contas':
+      return renderContas(el, ctx);
     case 'novo-comunicado':
       return renderNovoComunicado(el, ctx, { editar: state.params.editar || null });
     case 'inicio':
@@ -151,9 +162,24 @@ function renderLogin(msg = '') {
       state.usuario = r.user;
       state.view = 'inicio';
       renderShell();
+      exigirTrocaSePendente();
     } catch (err) {
       renderLogin(err.message);
     }
+  });
+}
+
+// Senha inicial pendente: força a troca antes de qualquer gestão (o backend
+// também bloqueia as escritas até resolver — isto aqui é a via feliz).
+function exigirTrocaSePendente() {
+  if (!state.usuario?.mustChangePassword) return;
+  abrirTrocaDeSenha({
+    forcado: true,
+    aoTrocar: (r) => {
+      setToken(r.token);
+      state.usuario = r.user;
+      renderShell();
+    },
   });
 }
 
@@ -172,6 +198,7 @@ async function boot() {
     state.setores = [];
   }
   renderShell();
+  exigirTrocaSePendente();
 }
 
 boot();

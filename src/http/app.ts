@@ -2,9 +2,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { Repositorio } from '../data/repositorio';
-import { JaExiste, NaoEncontrado } from '../domain/erros';
+import { FalhaDeGravacao, JaExiste, NaoEncontrado } from '../domain/erros';
 import { montarAuth } from './auth';
 import { montarAvisos } from './avisos';
+import { montarContas } from './contas';
 import { montarHealth } from './health';
 import { montarNavegacao } from './navegacao';
 import { montarPessoas } from './pessoas';
@@ -20,8 +21,9 @@ export function criarApp(repo: Repositorio): express.Express {
   const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
   app.use(express.static(publicDir));
 
-  app.use('/api/health', montarHealth());
+  app.use('/api/health', montarHealth(repo));
   app.use('/api/auth', montarAuth(repo));
+  app.use('/api/contas', montarContas(repo));
   app.use('/api/pessoas', montarPessoas(repo));
   app.use('/api/setores', montarSetores(repo));
   app.use('/api/avisos', montarAvisos(repo));
@@ -38,6 +40,13 @@ export function criarApp(repo: Repositorio): express.Express {
     }
     if (err instanceof JaExiste) {
       res.status(409).json({ erro: err.message });
+      return;
+    }
+    if (err instanceof FalhaDeGravacao) {
+      // Problema do AMBIENTE (disco/permissão/antivírus) — devolve a causa
+      // para o admin agir, em vez de um "erro interno" mudo.
+      console.error('falha de gravação:', err.message);
+      res.status(503).json({ erro: err.message });
       return;
     }
     const status = (err as { status?: number; statusCode?: number }).status ?? (err as { statusCode?: number }).statusCode;

@@ -6,7 +6,7 @@ const PAGE_SIZE = 8;
 
 // Console de pessoas/ramais. Serve as duas vistas do redesign:
 //   • Ramais (público, somente leitura) — todo servidor consulta o diretório.
-//   • Usuários (admin) — CRUD completo (console 3a + drawer 3b + confirmação).
+//   • Pessoas (admin) — CRUD completo (console 3a + drawer 3b + confirmação).
 // A distinção é `manage`: no console do admin aparecem ações, "Novo" e o drawer.
 export async function renderPessoas(el, ctx, { manage = false } = {}) {
   const admin = manage && ctx.admin;
@@ -23,12 +23,12 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   el.innerHTML = `
     <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px">
       <div>
-        <h1 class="page-title">${admin ? 'Usuários' : 'Ramais'}</h1>
+        <h1 class="page-title">${admin ? 'Pessoas' : 'Ramais'}</h1>
         <p class="page-sub" style="margin:4px 0 0">${
-          admin ? 'Gerencie o cadastro de servidores e o diretório' : 'Diretório de servidores, setores e ramais'
+          admin ? 'Diretório de servidores — cadastro, setores e aniversários' : 'Diretório de servidores, setores e ramais'
         }</p>
       </div>
-      ${admin ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Novo usuário</button>` : ''}
+      ${admin ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
     </div>
 
     <div class="stats" id="p-stats"></div>
@@ -229,7 +229,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
     ov.innerHTML = `
       <div class="drawer" role="dialog" aria-modal="true">
         <div class="drawer-head">
-          <div><h2>${edicao ? 'Editar usuário' : 'Novo usuário'}</h2>
+          <div><h2>${edicao ? 'Editar pessoa' : 'Nova pessoa'}</h2>
             <p>${edicao ? 'Atualize o cadastro do servidor' : 'Cadastre um novo servidor no diretório'}</p></div>
           <button class="drawer-close" title="Fechar">${ico('close', { size: 22 })}</button>
         </div>
@@ -339,7 +339,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
     ov.innerHTML = `
       <div class="modal" role="alertdialog" aria-modal="true">
         <div class="modal-icon">${ico('delete_forever', { size: 28 })}</div>
-        <h3>Excluir usuário?</h3>
+        <h3>Excluir pessoa?</h3>
         <p>Esta ação removerá permanentemente <strong style="color:var(--text)">${esc(
           p.name,
         )}</strong> e não pode ser desfeita.</p>

@@ -52,12 +52,27 @@ npm run importar-aniversariantes -- /caminho/ANIVERSARIANTES_SEPLAG_2026.xlsx
 ```
 
 **Rode o importador com o app parado** (o servidor mantém o estado em memória
-e sobrescreveria a importação na próxima gravação); depois suba com `npm start`.
+e sobrescreveria a importação na próxima gravação); depois suba com `npm start`
+e **confira em `/api/health`** — a resposta traz a contagem de pessoas que o
+servidor está lendo e se o `data/` é gravável.
 
 E-mail e ramal não existem nessa fonte: ficam vazios e podem ser preenchidos
 depois pela tela do admin (ou por uma integração futura, ex.: Synergy+).
 Grafias divergentes de setor são normalizadas (CEDIDO→CEDIDA, GABINTE→GABINETE,
 SUGESPE→SECOGE, `\` → `/`).
+
+**Plano B — CSV (funciona com qualquer planilha):** se o XLSX não for
+reconhecido, abra a planilha no Excel e salve como CSV com o cabeçalho
+`nome;setor;dia;mes` (opcionais: `email;ramal;cargo`, em qualquer ordem):
+
+```bash
+npm run importar-csv -- /caminho/pessoas.csv
+```
+
+> **Importante:** `data/` **não vai para o git** (LGPD). Clonar o repositório em
+> outra máquina sempre chega com o banco **vazio** — a importação precisa rodar
+> na máquina de destino, ou o `data/intranet.json` precisa ser copiado junto
+> (é o que o pacote do DEPLOY.md faz).
 
 **B) SQL completo (se você tiver o arquivo):**
 
@@ -89,6 +104,8 @@ Erros comuns:
 
 | Sintoma | Causa | Correção |
 |---|---|---|
+| Sistema no ar, mas **sem nenhuma pessoa** | `data/` não vai para o git — clone novo chega vazio | rode a importação **nesta máquina** (`importar-aniversariantes`/`importar-csv`) ou copie o `data/intranet.json`; confira a contagem em `/api/health` |
+| **Cadastro/importação não salva** ("erro interno"/503) | pasta `data/` sem permissão de escrita, antivírus ou OneDrive segurando o arquivo | rode `npm run doctor`; veja `gravavel` em `/api/health`; tire o app de pasta sincronizada/protegida — agora o boot também falha cedo com a causa |
 | `You installed esbuild for another platform` | `node_modules` copiado entre sistemas (ex.: WSL ↔ Windows) | apague `node_modules` e rode `npm install` na máquina onde vai executar |
 | `Nenhum registro reconhecido em …` | arquivo errado (ex.: `add_all_employees.sql`, que só tem comentários) ou formato diferente | use o `employees_real_data_complete.sql`; o doctor mostra quantas linhas reconheceu |
 | Erro logo ao iniciar, mencionando a versão | Node < 18 | instale o Node LTS (o `npm install` e o app agora avisam claramente) |

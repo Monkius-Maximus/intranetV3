@@ -49,12 +49,18 @@ export interface Pessoa {
 export const CAMPOS_NUCLEO = ['name', 'departmentCode', 'departmentFull', 'birthDay', 'birthMonth'] as const;
 
 // Registro normalizado que qualquer origem (XLSX, SQL, API, Forms) produz.
+// Os campos de enriquecimento são opcionais: quando a origem os traz (ex.:
+// CSV com e-mail/ramal), o ingest os aplica SÓ onde estiver vazio — nunca
+// sobrescreve o que o admin preencheu (ver mesclarPessoas).
 export interface PessoaImportada {
   name: string;
   departmentCode: string | null;
   departmentFull: string | null;
   birthDay: number | null;
   birthMonth: number | null;
+  email?: string | null;
+  phoneExtension?: string | null;
+  cargo?: string | null;
 }
 
 export function pessoaVazia(): Omit<Pessoa, 'id'> {

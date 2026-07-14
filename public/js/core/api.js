@@ -25,7 +25,13 @@ export async function api(path, options = {}) {
   }
   if (!res.ok) {
     const b = await res.json().catch(() => ({}));
-    throw new Error(b.erro || `erro ${res.status}`);
+    let msg = b.erro || `erro ${res.status}`;
+    // Zod: torna a validação acionável ("campo: problema") em vez de genérica.
+    if (Array.isArray(b.detalhes) && b.detalhes.length > 0) {
+      const itens = b.detalhes.slice(0, 2).map((d) => `${(d.path || []).join('.') || 'corpo'}: ${d.message}`);
+      msg += ` — ${itens.join('; ')}`;
+    }
+    throw new Error(msg);
   }
   return res.status === 204 ? null : res.json();
 }

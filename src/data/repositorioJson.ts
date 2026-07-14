@@ -1,5 +1,6 @@
 import { criarGravador, lerJson } from './arquivoJson';
 import type {
+  DadosNovoUsuario,
   FiltroPessoa,
   RepoAvisos,
   RepoDepartamentos,
@@ -8,7 +9,7 @@ import type {
   RepoUsuarios,
   Repositorio,
 } from './repositorio';
-import { NaoEncontrado } from '../domain/erros';
+import { JaExiste, NaoEncontrado } from '../domain/erros';
 import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { Departamento } from '../domain/departamento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
@@ -31,6 +32,14 @@ function docVazio(): Doc {
 
 function normalizar(t: string): string {
   return t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
+
+// Contas gravadas antes dos campos ativo/mustChangePassword existirem:
+// completa os padrões ao ler (ativa, sem troca pendente).
+function normalizarUsuario(u: Usuario): Usuario {
+  u.ativo = u.ativo !== false;
+  u.mustChangePassword = u.mustChangePassword === true;
+  return u;
 }
 
 // Repositório respaldado por um único arquivo JSON (estado em memória +
@@ -226,13 +235,46 @@ export class RepositorioJson implements Repositorio {
   };
 
   usuarios: RepoUsuarios = {
-    porEmail: async (email) => this.doc.usuarios.find((u) => u.email.toLowerCase() === email.toLowerCase()),
-    obter: async (id) => this.doc.usuarios.find((u) => u.id === id),
-    criar: async (dados) => {
-      const u: Usuario = { id: this.proximoId('usuarios'), ...dados };
+    listar: async () =>
+      [...this.doc.usuarios].map(normalizarUsuario).sort((a, b) => a.name.localeCompare(b.name, 'pt')),
+    porEmail: async (email) => {
+      const u = this.doc.usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
+      return u && normalizarUsuario(u);
+    },
+    obter: async (id) => {
+      const u = this.doc.usuarios.find((x) => x.id === id);
+      return u && normalizarUsuario(u);
+    },
+    criar: async (dados: DadosNovoUsuario) => {
+      if (this.doc.usuarios.some((x) => x.email.toLowerCase() === dados.email.toLowerCase())) {
+        throw new JaExiste('já existe uma conta com este e-mail');
+      }
+      const u: Usuario = {
+        id: this.proximoId('usuarios'),
+        ativo: true,
+        mustChangePassword: false,
+        ...dados,
+      };
       this.doc.usuarios.push(u);
       await this.persistir();
       return u;
+    },
+    atualizar: async (id, patch) => {
+      const u = this.doc.usuarios.find((x) => x.id === id);
+      if (!u) throw new NaoEncontrado('conta não encontrada');
+      if (patch.email && this.doc.usuarios.some((x) => x.id !== id && x.email.toLowerCase() === patch.email!.toLowerCase())) {
+        throw new JaExiste('já existe uma conta com este e-mail');
+      }
+      Object.assign(u, patch);
+      await this.persistir();
+      return normalizarUsuario(u);
+    },
+    remover: async (id) => {
+      const i = this.doc.usuarios.findIndex((x) => x.id === id);
+      if (i < 0) throw new NaoEncontrado('conta não encontrada');
+      const [u] = this.doc.usuarios.splice(i, 1);
+      await this.persistir();
+      return normalizarUsuario(u);
     },
     contar: async () => this.doc.usuarios.length,
   };
