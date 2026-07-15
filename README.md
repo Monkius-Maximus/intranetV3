@@ -12,7 +12,7 @@ pela porta aberta no firewall.
 
 - **Servidor:** Node.js + Express 5 + TypeScript (rodando via `tsx`, sem build).
 - **Validação:** Zod. **Auth:** leitura pública; escrita só para o admin
-  (JWT + bcrypt). Ver *Segurança* em [DEPLOY.md](DEPLOY.md#4-segurança).
+  (JWT + bcrypt). Ver *Segurança* em [DEPLOY.md](DEPLOY.md#5-segurança).
 - **Dados:** `data/intranet.json` (escrita atômica). **UI:** `public/` (HTML/JS/CSS).
 
 ## Rodar (desenvolvimento ou produção)

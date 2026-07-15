@@ -116,7 +116,39 @@ O `node_modules/` do WSL **não serve**. Duas saídas:
 No servidor: instale o `.msi` do Node, extraia a pasta e rode `npm start`
 (Agendador de Tarefas ou `nssm` para manter como serviço — ver seção 1).
 
-## 3. Backup e restauração
+## 3. "Ninguém consegue acessar" — checklist de rede
+
+O app funciona no host (`localhost:3000`) mas os outros PCs não acessam?
+Siga na ordem — cada passo divide o problema ao meio:
+
+1. **A porta está escutando na rede?** Com o app no ar, em outro terminal:
+   `netstat -ano | findstr :3000` (Windows). Precisa aparecer
+   `0.0.0.0:3000 ... LISTENING`. Nada apareceu = o app não está rodando
+   nesse momento. `127.0.0.1:3000` = bind local (confira a env `HOST`).
+2. **Use o IP certo.** `0.0.0.0` não é endereço acessável — é "todas as
+   placas". O boot imprime as URLs reais (`http://<IP>:3000`); é essa que os
+   colegas usam. (`ipconfig` → IPv4 do adaptador Wi-Fi/Ethernet; ignore o
+   "vEthernet (WSL)".)
+3. **Ping falhou? Não conclui nada.** Windows corporativo costuma bloquear
+   ICMP com o TCP liberado. Teste a URL direto no navegador do outro
+   dispositivo mesmo com ping em timeout.
+4. **Teste no hotspot do celular** (notebook + outro aparelho no mesmo
+   hotspot): funcionou = a rede da EMPRESA bloqueia tráfego entre
+   dispositivos (client isolation/VLAN) — só a TI resolve (liberar a porta
+   3000/mesma VLAN). Falhou até no hotspot = o bloqueio é no host: ver 5–6.
+5. **Firewall de Domínio via GPO:** em PC de empresa, o perfil "Domínio" pode
+   continuar ativo mesmo com o firewall "desligado" na interface. Confira:
+   `Get-NetFirewallProfile | Select Name, Enabled` (PowerShell admin) e, se
+   preciso: `netsh advfirewall firewall add rule name="Intranet 3000" dir=in
+   action=allow protocol=TCP localport=3000`.
+6. **ESET (ou outro antivírus com firewall próprio):** o módulo de firewall é
+   independente do antivírus e da interface — e, se for gerenciado pela
+   empresa, a política se reaplica sozinha. Marque a rede como confiável
+   (Home/Office) ou crie regra de entrada para TCP 3000.
+7. **WSL:** rodar dentro do WSL não expõe a porta à LAN sem passo extra
+   (o boot avisa). Rode no Windows nativo ou use `networkingMode=mirrored`.
+
+## 4. Backup e restauração
 
 Todo o estado está em **um arquivo**:
 
@@ -128,7 +160,7 @@ Restaurar = colocar o arquivo de volta em `data/` e reiniciar. (O segredo dos
 tokens fica em `data/jwt-secret.key` — inclua no backup se quiser que os logins
 atuais sobrevivam à restauração.)
 
-## 4. Segurança
+## 5. Segurança
 
 - **Leitura pública, escrita só admin.** O usuário comum consulta o diretório
   sem login; só o administrador entra (senha **bcrypt**, token **JWT** com
