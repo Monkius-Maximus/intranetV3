@@ -214,6 +214,132 @@ describe('Navegação dirigida por banco', () => {
   });
 });
 
+describe('Tiles dirigidos por banco', () => {
+  it('seed criou os 6 tiles; leitura é pública', async () => {
+    const r = await request(app).get('/api/tiles');
+    expect(r.status).toBe(200);
+    expect(r.body.length).toBe(6);
+    expect(r.body[0].ordem).toBe(1);
+  });
+
+  it('admin cria, edita, reordena e exclui; URL inválida é 422', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/tiles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ label: 'Biblioteca', icon: 'local_library', cor: '#103a6b', url: 'https://biblioteca.pe.gov.br' });
+    expect(criado.status).toBe(201);
+
+    const interno = await request(app)
+      .put(`/api/tiles/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ url: '#aniversariantes' });
+    expect(interno.status).toBe(200);
+    expect(interno.body.url).toBe('#aniversariantes');
+
+    const invalida = await request(app)
+      .post('/api/tiles')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ label: 'X', icon: 'badge', cor: '#1e73be', url: 'javascript:alert(1)' });
+    expect(invalida.status).toBe(422);
+
+    const lista = (await request(app).get('/api/tiles')).body;
+    const ids = lista.map((t: { id: number }) => t.id).reverse();
+    await request(app).put('/api/tiles/ordem').set('Authorization', `Bearer ${token}`).send({ ids });
+    const depois = (await request(app).get('/api/tiles')).body;
+    expect(depois[0].id).toBe(ids[0]);
+
+    const del = await request(app).delete(`/api/tiles/${criado.body.id}`).set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+  });
+});
+
+describe('Setores editáveis', () => {
+  it('renomear a sigla cascateia para as pessoas do setor', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/setores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'nucleo-x', name: 'Núcleo Experimental' });
+    expect(criado.status).toBe(201);
+    expect(criado.body.code).toBe('NUCLEO-X'); // sigla normalizada p/ caixa alta
+
+    const pessoa = await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Pessoa do Núcleo', departmentCode: 'NUCLEO-X', departmentFull: 'NUCLEO-X/EQUIPE' });
+
+    const renome = await request(app)
+      .put(`/api/setores/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'NEX' });
+    expect(renome.status).toBe(200);
+
+    const depois = await request(app).get(`/api/pessoas/${pessoa.body.id}`);
+    expect(depois.body.departmentCode).toBe('NEX'); // cascata
+    expect(depois.body.departmentFull).toBe('NEX/EQUIPE');
+  });
+
+  it('não exclui setor em uso (409); exclui quando vazio', async () => {
+    const token = await loginAdmin();
+    const setores = (await request(app).get('/api/setores')).body;
+    const nex = setores.find((s: { code: string }) => s.code === 'NEX');
+    const emUso = await request(app).delete(`/api/setores/${nex.id}`).set('Authorization', `Bearer ${token}`);
+    expect(emUso.status).toBe(409);
+
+    const vazio = await request(app)
+      .post('/api/setores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'TEMP', name: 'Temporário' });
+    const del = await request(app).delete(`/api/setores/${vazio.body.id}`).set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+  });
+
+  it('sigla duplicada é 409; escrita sem token é 401', async () => {
+    const token = await loginAdmin();
+    const dup = await request(app)
+      .post('/api/setores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'SEPO', name: 'Duplicado' });
+    expect(dup.status).toBe(409);
+    expect((await request(app).post('/api/setores').send({ code: 'X2', name: 'X' })).status).toBe(401);
+  });
+});
+
+describe('Eventos (agenda)', () => {
+  it('admin cria e edita; leitura pública ordenada por data', async () => {
+    const token = await loginAdmin();
+    const b = await request(app)
+      .post('/api/eventos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ titulo: 'Reunião geral', data: '2026-08-20', hora: '10h', local: 'Auditório' });
+    expect(b.status).toBe(201);
+    const a = await request(app)
+      .post('/api/eventos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ titulo: 'Prazo relatório', data: '2026-08-05' });
+    expect(a.body.hora).toBeNull();
+
+    const lista = await request(app).get('/api/eventos');
+    expect(lista.status).toBe(200);
+    const idx = (t: string) => lista.body.findIndex((e: { titulo: string }) => e.titulo === t);
+    expect(idx('Prazo relatório')).toBeLessThan(idx('Reunião geral')); // ordenado por data
+
+    const edit = await request(app)
+      .put(`/api/eventos/${b.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ local: 'Sala 3' });
+    expect(edit.body.local).toBe('Sala 3');
+    expect(edit.body.titulo).toBe('Reunião geral');
+
+    const dataRuim = await request(app)
+      .post('/api/eventos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ titulo: 'X', data: '20/08/2026' });
+    expect(dataRuim.status).toBe(422);
+  });
+});
+
 describe('Contas de acesso', () => {
   it('admin cria conta; com troca pendente não escreve; após trocar a senha, escreve', async () => {
     const token = await loginAdmin();

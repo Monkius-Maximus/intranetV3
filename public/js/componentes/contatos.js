@@ -28,7 +28,10 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           admin ? 'Diretório de servidores — cadastro, setores e aniversários' : 'Diretório de servidores, setores e ramais'
         }</p>
       </div>
-      ${admin ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
+      <div style="display:flex;gap:10px">
+        ${admin ? `<button class="btn btn-ghost gerir-setores">${ico('apartment', { size: 18 })} Setores</button>` : ''}
+        ${admin ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
+      </div>
     </div>
 
     <div class="stats" id="p-stats"></div>
@@ -219,6 +222,127 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
     pintarTabela();
   });
   el.querySelector('.novo-pessoa')?.addEventListener('click', () => abrirDrawer(null));
+  el.querySelector('.gerir-setores')?.addEventListener('click', () => abrirSetores());
+
+  // ------------------------------------------------------- gestão de setores
+  // Drawer com a lista (sigla, nome, nº de pessoas), edição inline, exclusão
+  // (bloqueada pelo servidor se houver pessoas) e formulário de criação.
+  // Renomear a sigla cascateia para as pessoas — o servidor cuida disso.
+  function abrirSetores() {
+    let mudou = false;
+    const ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.innerHTML = `
+      <div class="drawer" role="dialog" aria-modal="true">
+        <div class="drawer-head">
+          <div><h2>Setores</h2><p>Siglas e nomes usados no diretório — renomear atualiza as pessoas</p></div>
+          <button class="drawer-close" title="Fechar">${ico('close', { size: 22 })}</button>
+        </div>
+        <div class="drawer-body" id="setores-lista"></div>
+        <div class="drawer-foot" style="flex-direction:column;align-items:stretch;gap:8px">
+          <div class="lbl" style="font-size:12px;font-weight:600;color:var(--muted-2)">Novo setor</div>
+          <div style="display:flex;gap:8px">
+            <input name="ns-code" placeholder="SIGLA" maxlength="20" style="width:110px;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px;text-transform:uppercase" />
+            <input name="ns-name" placeholder="Nome por extenso" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px" />
+            <button class="btn btn-primary btn-sm criar-setor">${ico('add', { size: 16 })} Criar</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const fechar = async () => {
+      ov.remove();
+      if (mudou) await ctx.recarregarSetores?.();
+    };
+    ov.addEventListener('mousedown', (e) => {
+      if (e.target === ov) fechar();
+    });
+    ov.querySelector('.drawer-close').addEventListener('click', fechar);
+
+    async function pintar() {
+      const setores = await api('/setores');
+      const porSetor = new Map();
+      for (const p of estado.todas) {
+        if (p.departmentCode) porSetor.set(p.departmentCode, (porSetor.get(p.departmentCode) ?? 0) + 1);
+      }
+      const lista = ov.querySelector('#setores-lista');
+      lista.innerHTML = setores
+        .map((s) => {
+          const n = porSetor.get(s.code) ?? 0;
+          return `<div class="setor-row" data-id="${s.id}">
+            <span class="badge-role setor">${esc(s.code)}</span>
+            <div class="meta"><div class="t">${esc(s.name)}</div><div class="s">${n} pessoa(s)</div></div>
+            <button class="row-btn ed" data-id="${s.id}" title="Editar">${ico('edit', { size: 18 })}</button>
+            <button class="row-btn danger del" data-id="${s.id}" title="${n > 0 ? 'Mova as pessoas antes de excluir' : 'Excluir'}">${ico(
+              'delete',
+              { size: 18 },
+            )}</button>
+          </div>`;
+        })
+        .join('');
+
+      lista.querySelectorAll('.del').forEach((b) =>
+        b.addEventListener('click', () => {
+          const s = setores.find((x) => String(x.id) === b.dataset.id);
+          if (!s || !confirm(`Excluir o setor ${s.code}?`)) return;
+          acaoAdmin(ctx, async () => {
+            await api(`/setores/${s.id}`, { method: 'DELETE' });
+            mudou = true;
+            await pintar();
+          });
+        }),
+      );
+
+      lista.querySelectorAll('.ed').forEach((b) =>
+        b.addEventListener('click', () => {
+          const s = setores.find((x) => String(x.id) === b.dataset.id);
+          const row = lista.querySelector(`.setor-row[data-id="${s.id}"]`);
+          row.innerHTML = `
+            <input name="e-code" value="${escAttr(s.code)}" maxlength="20" style="width:100px;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px;text-transform:uppercase" />
+            <input name="e-name" value="${escAttr(s.name)}" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px" />
+            <button class="row-btn ok" title="Salvar">${ico('check', { size: 18 })}</button>
+            <button class="row-btn cancel" title="Cancelar">${ico('close', { size: 18 })}</button>`;
+          row.querySelector('.cancel').addEventListener('click', pintar);
+          row.querySelector('.ok').addEventListener('click', () => {
+            const code = row.querySelector('[name=e-code]').value.trim().toUpperCase();
+            const name = row.querySelector('[name=e-name]').value.trim();
+            if (!code || !name) return;
+            acaoAdmin(ctx, async () => {
+              await api(`/setores/${s.id}`, { method: 'PUT', body: JSON.stringify({ code, name }) });
+              mudou = true;
+              await carregarTudoLocal();
+              await pintar();
+            });
+          });
+        }),
+      );
+    }
+
+    // após renomear sigla, as pessoas mudam de código — recarrega a base local
+    async function carregarTudoLocal() {
+      estado.todas = await api('/pessoas');
+      pintarStats();
+      await buscar();
+    }
+
+    ov.querySelector('.criar-setor').addEventListener('click', () => {
+      const code = ov.querySelector('[name=ns-code]').value.trim().toUpperCase();
+      const name = ov.querySelector('[name=ns-name]').value.trim();
+      if (!code || !name) {
+        alert('Preencha a sigla e o nome.');
+        return;
+      }
+      acaoAdmin(ctx, async () => {
+        await api('/setores', { method: 'POST', body: JSON.stringify({ code, name }) });
+        ov.querySelector('[name=ns-code]').value = '';
+        ov.querySelector('[name=ns-name]').value = '';
+        mudou = true;
+        await pintar();
+      });
+    });
+
+    pintar();
+  }
 
   // ------------------------------------------------------------- drawer (3b)
   function abrirDrawer(p) {

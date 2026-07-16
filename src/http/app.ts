@@ -2,10 +2,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { Repositorio } from '../data/repositorio';
-import { FalhaDeGravacao, JaExiste, NaoEncontrado } from '../domain/erros';
+import { EmUso, FalhaDeGravacao, JaExiste, NaoEncontrado } from '../domain/erros';
 import { montarAuth } from './auth';
 import { montarAvisos } from './avisos';
 import { montarContas } from './contas';
+import { montarEventos } from './eventos';
+import { montarTiles } from './tiles';
 import { montarHealth } from './health';
 import { montarNavegacao } from './navegacao';
 import { montarPessoas } from './pessoas';
@@ -28,6 +30,8 @@ export function criarApp(repo: Repositorio): express.Express {
   app.use('/api/setores', montarSetores(repo));
   app.use('/api/avisos', montarAvisos(repo));
   app.use('/api/navegacao', montarNavegacao(repo));
+  app.use('/api/tiles', montarTiles(repo));
+  app.use('/api/eventos', montarEventos(repo));
 
   app.use((_req, res) => {
     res.status(404).json({ erro: 'recurso não encontrado' });
@@ -38,7 +42,7 @@ export function criarApp(repo: Repositorio): express.Express {
       res.status(404).json({ erro: err.message });
       return;
     }
-    if (err instanceof JaExiste) {
+    if (err instanceof JaExiste || err instanceof EmUso) {
       res.status(409).json({ erro: err.message });
       return;
     }

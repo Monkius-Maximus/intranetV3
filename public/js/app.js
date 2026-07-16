@@ -31,6 +31,11 @@ function montarCtx() {
     navegar,
     sair,
     entrar: () => renderLogin(),
+    // setores mudaram (criar/renomear/excluir): recarrega a referência e a view
+    recarregarSetores: async () => {
+      state.setores = await api('/setores').catch(() => state.setores);
+      renderShell();
+    },
     trocarSenha: () =>
       abrirTrocaDeSenha({
         aoTrocar: (r) => {

@@ -1,7 +1,9 @@
 import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
-import type { Departamento } from '../domain/departamento';
+import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departamento';
+import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
 import type { DadosNovaPessoa, PatchPessoa, Pessoa } from '../domain/pessoa';
+import type { DadosNovoTile, PatchTile, Tile } from '../domain/tile';
 import type { Usuario } from '../domain/usuario';
 
 // Contrato de persistência. A aplicação (http/, ingest, seed) depende SÓ desta
@@ -30,6 +32,28 @@ export interface RepoDepartamentos {
   listar(): Promise<Departamento[]>;
   porCodigo(code: string): Promise<Departamento | undefined>;
   upsert(dados: Omit<Departamento, 'id'>): Promise<Departamento>;
+  criar(dados: DadosNovoSetor): Promise<Departamento>;
+  // Renomear a sigla cascateia para as pessoas do setor (departmentCode/Full).
+  atualizar(id: number, patch: PatchSetor): Promise<Departamento>;
+  // Remoção bloqueada (EmUso) enquanto houver pessoa no setor.
+  remover(id: number): Promise<void>;
+  contar(): Promise<number>;
+}
+
+export interface RepoTiles {
+  listar(): Promise<Tile[]>;
+  criar(dados: DadosNovoTile): Promise<Tile>;
+  atualizar(id: number, patch: PatchTile): Promise<Tile>;
+  remover(id: number): Promise<void>;
+  reordenar(ids: number[]): Promise<void>;
+  contar(): Promise<number>;
+}
+
+export interface RepoEventos {
+  listar(): Promise<Evento[]>;
+  criar(dados: DadosNovoEvento): Promise<Evento>;
+  atualizar(id: number, patch: PatchEvento): Promise<Evento>;
+  remover(id: number): Promise<void>;
 }
 
 export interface RepoAvisos {
@@ -71,4 +95,6 @@ export interface Repositorio {
   avisos: RepoAvisos;
   navegacao: RepoNavegacao;
   usuarios: RepoUsuarios;
+  tiles: RepoTiles;
+  eventos: RepoEventos;
 }

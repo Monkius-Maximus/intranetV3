@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { hashPassword } from './auth';
 import { config } from './config';
 import type { Repositorio } from './data/repositorio';
+import type { DadosNovoTile } from './domain/tile';
 
 // Estrutura organizacional (não é dado pessoal — pode ser versionada).
 const DEPARTAMENTOS: { code: string; name: string; description: string }[] = [
@@ -52,9 +53,30 @@ const NAVEGACAO: GrupoSeed[] = [
   },
 ];
 
+// Tiles iniciais do dashboard (o admin edita rótulo/URL/ícone/cor pela tela;
+// as URLs abaixo são PONTO DE PARTIDA — confirme os endereços reais).
+const TILES: DadosNovoTile[] = [
+  { label: 'Ponto', icon: 'badge', cor: '#1e73be', url: 'https://www.seplag.pe.gov.br' },
+  { label: 'Contracheque', icon: 'request_quote', cor: '#1f8a52', url: 'https://www.seplag.pe.gov.br' },
+  { label: 'SEI!', icon: 'description', cor: '#c46a12', url: 'https://sei.pe.gov.br' },
+  { label: 'Suporte', icon: 'support_agent', cor: '#6b3fd1', url: 'https://www.seplag.pe.gov.br' },
+  { label: 'Manuais', icon: 'menu_book', cor: '#b23c6e', url: 'https://www.seplag.pe.gov.br' },
+  { label: 'Ramais', icon: 'groups', cor: '#0f7a86', url: '#ramais' },
+];
+
 export async function seed(repo: Repositorio): Promise<void> {
-  for (const d of DEPARTAMENTOS) {
-    await repo.departamentos.upsert(d);
+  // Só na primeira execução: depois disso os setores são GERIDOS PELO ADMIN
+  // (criar/renomear/excluir pela tela) — reaplicar o seed desfaria as edições.
+  if ((await repo.departamentos.contar()) === 0) {
+    for (const d of DEPARTAMENTOS) {
+      await repo.departamentos.upsert(d);
+    }
+  }
+
+  if ((await repo.tiles.contar()) === 0) {
+    for (const t of TILES) {
+      await repo.tiles.criar(t);
+    }
   }
 
   if ((await repo.navegacao.contarGrupos()) === 0) {

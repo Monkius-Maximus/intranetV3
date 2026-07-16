@@ -402,6 +402,90 @@ button {
   font-size: 12px;
   font-weight: 600;
 }
+.tile-wrap {
+  position: relative;
+}
+.tile-wrap .tile {
+  width: 100%;
+}
+.tile-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: none;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 7px;
+  padding: 2px;
+}
+.tile-wrap:hover .tile-tools {
+  display: flex;
+}
+.tile-tools .tt {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 3px;
+  border-radius: 5px;
+  display: flex;
+  cursor: pointer;
+}
+.tile-tools .tt:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.tile-ghost {
+  background: none;
+  border: 1.5px dashed var(--field-border);
+  color: var(--faint);
+}
+.tile-ghost:hover {
+  filter: none;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* editor de tile: picker de ícones e de cores */
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.icon-opt {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 8px 0;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-opt:hover {
+  background: var(--surface);
+}
+.icon-opt.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.swatch.is-on {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px #fff inset;
+}
 
 /* --------------------------------------------------------------- cards */
 .card {
@@ -563,6 +647,14 @@ button {
 .event-info .s {
   font-size: 12px;
   color: var(--muted-2);
+}
+.event-tools {
+  display: none;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.event-row:hover .event-tools {
+  display: inline-flex;
 }
 .aniv-row {
   display: flex;
@@ -1238,6 +1330,33 @@ button {
   color: var(--muted-2);
   font-size: 14px;
   padding: 8px 0;
+}
+
+/* ------------------------------------------------------- gestão de setores */
+.setor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setor-row:last-child {
+  border-bottom: none;
+}
+.setor-row .meta {
+  flex: 1;
+  min-width: 0;
+}
+.setor-row .t {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setor-row .s {
+  font-size: 12px;
+  color: var(--faint);
 }
 
 /* -------------------------------------------------- aniversariantes (mês) */

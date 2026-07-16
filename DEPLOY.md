@@ -5,7 +5,20 @@ externo, nginx, systemd obrigatório nem build. O deploy é: instalar o Node,
 subir o app, **abrir a porta no firewall** — foi o que a equipe já validou na
 rede corporativa (Wi-Fi e cabo).
 
-## 1. Caminho simples (a máquina consegue instalar o Node)
+## 0. VM Ubuntu com internet? Use o instalador (recomendado)
+
+```bash
+git clone <repo> intranet && cd intranet && git checkout <branch>
+sudo bash deploy/instalar.sh          # porta 80; ou: sudo PORTA=3000 bash deploy/instalar.sh
+```
+
+Ele instala o Node se faltar, cria o usuário de serviço, coloca o app em
+`/opt/intranet`, pergunta a senha do 1º admin, ativa o serviço systemd
+(reinício automático) e agenda backup diário. **Atualizar depois:** `git pull
+&& sudo bash deploy/instalar.sh` (o `data/` é preservado). Em seguida carregue
+as pessoas reais — comando pronto no cabeçalho do próprio script.
+
+## 1. Caminho manual (qualquer máquina, Linux ou Windows)
 
 Na máquina que vai hospedar (Linux ou Windows):
 

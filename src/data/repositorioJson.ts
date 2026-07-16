@@ -4,16 +4,20 @@ import type {
   FiltroPessoa,
   RepoAvisos,
   RepoDepartamentos,
+  RepoEventos,
   RepoNavegacao,
   RepoPessoas,
+  RepoTiles,
   RepoUsuarios,
   Repositorio,
 } from './repositorio';
-import { JaExiste, NaoEncontrado } from '../domain/erros';
+import { EmUso, JaExiste, NaoEncontrado } from '../domain/erros';
 import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
-import type { Departamento } from '../domain/departamento';
+import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departamento';
+import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
 import { type DadosNovaPessoa, type PatchPessoa, type Pessoa, pessoaVazia } from '../domain/pessoa';
+import type { DadosNovoTile, PatchTile, Tile } from '../domain/tile';
 import type { Usuario } from '../domain/usuario';
 
 interface Doc {
@@ -23,11 +27,23 @@ interface Doc {
   grupos: GrupoMenu[];
   itens: ItemMenu[];
   usuarios: Usuario[];
+  tiles: Tile[];
+  eventos: Evento[];
   seq: Record<string, number>;
 }
 
 function docVazio(): Doc {
-  return { pessoas: [], departamentos: [], avisos: [], grupos: [], itens: [], usuarios: [], seq: {} };
+  return {
+    pessoas: [],
+    departamentos: [],
+    avisos: [],
+    grupos: [],
+    itens: [],
+    usuarios: [],
+    tiles: [],
+    eventos: [],
+    seq: {},
+  };
 }
 
 function normalizar(t: string): string {
@@ -56,6 +72,9 @@ export class RepositorioJson implements Repositorio {
 
   async iniciar(): Promise<void> {
     this.doc = await lerJson<Doc>(this.caminho, docVazio());
+    // Bancos gravados por versões anteriores não têm as coleções novas.
+    this.doc.tiles ??= [];
+    this.doc.eventos ??= [];
   }
 
   private persistir(): Promise<void> {
@@ -115,7 +134,7 @@ export class RepositorioJson implements Repositorio {
   };
 
   departamentos: RepoDepartamentos = {
-    listar: async () => [...this.doc.departamentos].sort((a, b) => a.name.localeCompare(b.name, 'pt')),
+    listar: async () => [...this.doc.departamentos].sort((a, b) => a.code.localeCompare(b.code, 'pt')),
     porCodigo: async (code) => this.doc.departamentos.find((d) => d.code === code),
     upsert: async (dados) => {
       const ex = this.doc.departamentos.find((d) => d.code === dados.code);
@@ -128,6 +147,106 @@ export class RepositorioJson implements Repositorio {
       this.doc.departamentos.push(d);
       await this.persistir();
       return d;
+    },
+    criar: async (dados: DadosNovoSetor) => {
+      if (this.doc.departamentos.some((d) => d.code === dados.code)) {
+        throw new JaExiste('já existe um setor com esta sigla');
+      }
+      const d: Departamento = { id: this.proximoId('departamentos'), ...dados };
+      this.doc.departamentos.push(d);
+      await this.persistir();
+      return d;
+    },
+    atualizar: async (id, patch: PatchSetor) => {
+      const d = this.doc.departamentos.find((x) => x.id === id);
+      if (!d) throw new NaoEncontrado('setor não encontrado');
+      if (patch.code && patch.code !== d.code) {
+        if (this.doc.departamentos.some((x) => x.id !== id && x.code === patch.code)) {
+          throw new JaExiste('já existe um setor com esta sigla');
+        }
+        // Renomear a sigla cascateia para as pessoas: o código é a chave que
+        // liga pessoa→setor; sem isto, todas ficariam órfãs do filtro.
+        const antiga = d.code;
+        for (const p of this.doc.pessoas) {
+          if (p.departmentCode === antiga) {
+            p.departmentCode = patch.code;
+            if (p.departmentFull === antiga) p.departmentFull = patch.code;
+            else if (p.departmentFull?.startsWith(`${antiga}/`)) {
+              p.departmentFull = patch.code + p.departmentFull.slice(antiga.length);
+            }
+          }
+        }
+      }
+      Object.assign(d, patch);
+      await this.persistir();
+      return d;
+    },
+    remover: async (id) => {
+      const i = this.doc.departamentos.findIndex((x) => x.id === id);
+      if (i < 0) throw new NaoEncontrado('setor não encontrado');
+      const code = this.doc.departamentos[i].code;
+      const emUso = this.doc.pessoas.filter((p) => p.departmentCode === code).length;
+      if (emUso > 0) {
+        throw new EmUso(`o setor ${code} tem ${emUso} pessoa(s) — mova-as antes de excluir`);
+      }
+      this.doc.departamentos.splice(i, 1);
+      await this.persistir();
+    },
+    contar: async () => this.doc.departamentos.length,
+  };
+
+  tiles: RepoTiles = {
+    listar: async () => [...this.doc.tiles].sort((a, b) => a.ordem - b.ordem),
+    criar: async (dados: DadosNovoTile) => {
+      const t: Tile = { id: this.proximoId('tiles'), ordem: this.doc.tiles.length + 1, ...dados };
+      this.doc.tiles.push(t);
+      await this.persistir();
+      return t;
+    },
+    atualizar: async (id, patch: PatchTile) => {
+      const t = this.doc.tiles.find((x) => x.id === id);
+      if (!t) throw new NaoEncontrado('tile não encontrado');
+      Object.assign(t, patch);
+      await this.persistir();
+      return t;
+    },
+    remover: async (id) => {
+      const i = this.doc.tiles.findIndex((x) => x.id === id);
+      if (i < 0) throw new NaoEncontrado('tile não encontrado');
+      this.doc.tiles.splice(i, 1);
+      await this.persistir();
+    },
+    reordenar: async (ids) => {
+      ids.forEach((id, idx) => {
+        const t = this.doc.tiles.find((x) => x.id === id);
+        if (t) t.ordem = idx + 1;
+      });
+      await this.persistir();
+    },
+    contar: async () => this.doc.tiles.length,
+  };
+
+  eventos: RepoEventos = {
+    listar: async () =>
+      [...this.doc.eventos].sort((a, b) => a.data.localeCompare(b.data) || (a.hora ?? '').localeCompare(b.hora ?? '')),
+    criar: async (dados: DadosNovoEvento) => {
+      const e: Evento = { id: this.proximoId('eventos'), ...dados };
+      this.doc.eventos.push(e);
+      await this.persistir();
+      return e;
+    },
+    atualizar: async (id, patch: PatchEvento) => {
+      const e = this.doc.eventos.find((x) => x.id === id);
+      if (!e) throw new NaoEncontrado('evento não encontrado');
+      Object.assign(e, patch);
+      await this.persistir();
+      return e;
+    },
+    remover: async (id) => {
+      const i = this.doc.eventos.findIndex((x) => x.id === id);
+      if (i < 0) throw new NaoEncontrado('evento não encontrado');
+      this.doc.eventos.splice(i, 1);
+      await this.persistir();
     },
   };
 
