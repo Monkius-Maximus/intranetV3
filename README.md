@@ -7,6 +7,9 @@ login** — consulta tudo direto. Contas de acesso têm três papéis:
 **gestor** (gerencia as pessoas dos seus setores e os próprios comunicados)
 e **leitura**. Toda edição vale imediatamente — sem reiniciar o serviço.
 
+> 📖 **[MANUAL.md](MANUAL.md)** — o manual completo, passo a passo: instalação,
+> carga de dados, uso por papel (público/gestor/admin), operação e problemas.
+
 Arquitetura enxuta, no mesmo formato do projeto de Sistemas Distribuídos da equipe:
 **um único servidor Express** que serve a interface web **e** a API REST, com
 **persistência local em arquivo** (JSON atômico) — sem banco de dados externo,
