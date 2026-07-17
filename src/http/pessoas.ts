@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { autenticar, exigirAdmin } from '../auth';
+import { type AuthedRequest, autenticar, exigirGestao, gerenciaSetor } from '../auth';
 import type { Repositorio } from '../data/repositorio';
 import { atualizarPessoaSchema, criarPessoaSchema } from '../domain/pessoa';
-import { idParam, validar } from './util';
+import { auditar, idParam, validar } from './util';
 
 export function montarPessoas(repo: Repositorio): Router {
   const r = Router();
@@ -25,21 +25,53 @@ export function montarPessoas(repo: Repositorio): Router {
     res.json(p);
   });
 
-  // Escrita: só administrador.
-  r.post('/', autenticar, exigirAdmin, validar(criarPessoaSchema), async (req, res) => {
-    res.status(201).json(await repo.pessoas.criar(req.body));
+  // Escrita: admin (tudo) ou gestor (somente pessoas dos SEUS setores).
+  const foraDoEscopo = { erro: 'fora dos seus setores — peça a um administrador' };
+
+  r.post('/', autenticar, exigirGestao, validar(criarPessoaSchema), async (req: AuthedRequest, res) => {
+    if (!gerenciaSetor(req.user, req.body.departmentCode)) {
+      res.status(403).json(foraDoEscopo);
+      return;
+    }
+    const p = await repo.pessoas.criar(req.body);
+    await auditar(repo, req, 'cadastrou', 'pessoa', p.name);
+    res.status(201).json(p);
   });
 
-  r.put('/:id', autenticar, exigirAdmin, validar(atualizarPessoaSchema), async (req, res) => {
+  r.put('/:id', autenticar, exigirGestao, validar(atualizarPessoaSchema), async (req: AuthedRequest, res) => {
     const id = idParam(req, res);
     if (id === null) return;
-    res.json(await repo.pessoas.atualizar(id, req.body));
+    const atual = await repo.pessoas.obter(id);
+    if (!atual) {
+      res.status(404).json({ erro: 'pessoa não encontrada' });
+      return;
+    }
+    // Gestor: a pessoa precisa estar num setor dele E continuar num setor dele.
+    const destino = 'departmentCode' in req.body ? req.body.departmentCode : atual.departmentCode;
+    if (!gerenciaSetor(req.user, atual.departmentCode) || !gerenciaSetor(req.user, destino)) {
+      res.status(403).json(foraDoEscopo);
+      return;
+    }
+    const p = await repo.pessoas.atualizar(id, req.body);
+    await auditar(repo, req, 'editou', 'pessoa', p.name);
+    res.json(p);
   });
 
-  r.delete('/:id', autenticar, exigirAdmin, async (req, res) => {
+  r.delete('/:id', autenticar, exigirGestao, async (req: AuthedRequest, res) => {
     const id = idParam(req, res);
     if (id === null) return;
-    res.json(await repo.pessoas.remover(id));
+    const atual = await repo.pessoas.obter(id);
+    if (!atual) {
+      res.status(404).json({ erro: 'pessoa não encontrada' });
+      return;
+    }
+    if (!gerenciaSetor(req.user, atual.departmentCode)) {
+      res.status(403).json(foraDoEscopo);
+      return;
+    }
+    const p = await repo.pessoas.remover(id);
+    await auditar(repo, req, 'excluiu', 'pessoa', p.name);
+    res.json(p);
   });
 
   return r;

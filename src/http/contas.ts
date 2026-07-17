@@ -8,7 +8,7 @@ import {
   paraPublico,
   redefinirSenhaSchema,
 } from '../domain/usuario';
-import { idParam, validar } from './util';
+import { auditar, idParam, validar } from './util';
 
 // Contas de LOGIN (quem entra e gerencia) — não confundir com o diretório de
 // pessoas (/api/pessoas). Só administradores mexem aqui.
@@ -35,15 +35,17 @@ export function montarContas(repo: Repositorio): Router {
     res.json((await repo.usuarios.listar()).map(paraPublico));
   });
 
-  r.post('/', validar(criarContaSchema), async (req, res) => {
+  r.post('/', validar(criarContaSchema), async (req: AuthedRequest, res) => {
     const dados = req.body as z.infer<typeof criarContaSchema>;
     const conta = await repo.usuarios.criar({
       name: dados.name,
       email: dados.email,
       role: dados.role,
+      setores: dados.role === 'gestor' ? dados.setores : [],
       passwordHash: hashPassword(dados.senha),
       mustChangePassword: dados.mustChangePassword,
     });
+    await auditar(repo, req, 'criou', 'conta', `${conta.email} (${conta.role})`);
     res.status(201).json(paraPublico(conta));
   });
 
@@ -55,10 +57,12 @@ export function montarContas(repo: Repositorio): Router {
       res.status(409).json({ erro: 'esta é a única conta de administrador ativa — crie/ative outra antes' });
       return;
     }
-    res.json(paraPublico(await repo.usuarios.atualizar(id, patch)));
+    const conta = await repo.usuarios.atualizar(id, patch);
+    await auditar(repo, req, 'editou', 'conta', conta.email);
+    res.json(paraPublico(conta));
   });
 
-  r.put('/:id/senha', validar(redefinirSenhaSchema), async (req, res) => {
+  r.put('/:id/senha', validar(redefinirSenhaSchema), async (req: AuthedRequest, res) => {
     const id = idParam(req, res);
     if (id === null) return;
     const { senha, mustChangePassword } = req.body as z.infer<typeof redefinirSenhaSchema>;
@@ -66,6 +70,7 @@ export function montarContas(repo: Repositorio): Router {
       passwordHash: hashPassword(senha),
       mustChangePassword,
     });
+    await auditar(repo, req, 'redefiniu a senha de', 'conta', conta.email);
     res.json(paraPublico(conta));
   });
 
@@ -80,7 +85,9 @@ export function montarContas(repo: Repositorio): Router {
       res.status(409).json({ erro: 'esta é a única conta de administrador ativa — crie/ative outra antes' });
       return;
     }
-    res.json(paraPublico(await repo.usuarios.remover(id)));
+    const removida = await repo.usuarios.remover(id);
+    await auditar(repo, req, 'excluiu', 'conta', removida.email);
+    res.json(paraPublico(removida));
   });
 
   return r;

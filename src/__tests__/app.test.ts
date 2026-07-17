@@ -15,6 +15,7 @@ beforeAll(async () => {
   process.env.ADMIN_PASSWORD = 'admin12345';
   process.env.JWT_SECRET = 'segredo-de-teste';
   const dir = mkdtempSync(join(tmpdir(), 'intranet-test-'));
+  process.env.INTRANET_DATA = dir; // uploads de teste ficam no tmpdir, não no data/ real
 
   const { RepositorioJson } = await import('../data/repositorioJson');
   const { seed } = await import('../seed');
@@ -446,6 +447,146 @@ describe('Contas de acesso', () => {
       .post('/api/auth/login')
       .send({ email: 'desativada@test.local', senha: 'senha-valida-8' });
     expect(r.status).toBe(401);
+  });
+});
+
+describe('Anexos em comunicados', () => {
+  it('anexa, lista, baixa e remove; tipo proibido é 422', async () => {
+    const token = await loginAdmin();
+    const aviso = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Com anexo', body: 'segue anexo' });
+
+    const anexado = await request(app)
+      .post(`/api/avisos/${aviso.body.id}/anexos`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('arquivo', Buffer.from('conteudo do oficio'), 'oficio.pdf');
+    expect(anexado.status).toBe(201);
+    expect(anexado.body.anexos).toHaveLength(1);
+    expect(anexado.body.anexos[0].nome).toBe('oficio.pdf');
+
+    const anexoId = anexado.body.anexos[0].id;
+    const download = await request(app).get(`/api/avisos/${aviso.body.id}/anexos/${anexoId}/download`);
+    expect(download.status).toBe(200);
+    expect(download.headers['content-disposition']).toContain('oficio.pdf');
+    expect(download.body.toString()).toBe('conteudo do oficio');
+
+    const proibido = await request(app)
+      .post(`/api/avisos/${aviso.body.id}/anexos`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('arquivo', Buffer.from('MZ'), 'virus.exe');
+    expect(proibido.status).toBe(422);
+
+    const removido = await request(app)
+      .delete(`/api/avisos/${aviso.body.id}/anexos/${anexoId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(removido.status).toBe(200);
+    expect((await request(app).get(`/api/avisos/${aviso.body.id}/anexos/${anexoId}/download`)).status).toBe(404);
+  });
+});
+
+describe('Gestor por setor', () => {
+  let tokenGestor = '';
+  let avisoDoAdminId = 0;
+
+  it('admin cria gestor de SEPO; gestor loga com os setores no perfil', async () => {
+    const token = await loginAdmin();
+    const criada = await request(app)
+      .post('/api/contas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Gestora do SEPO',
+        email: 'gestora.sepo@test.local',
+        senha: 'senha-gestora-1',
+        role: 'gestor',
+        setores: ['sepo'],
+        mustChangePassword: false,
+      });
+    expect(criada.status).toBe(201);
+    expect(criada.body.setores).toEqual(['SEPO']); // normalizado p/ caixa alta
+
+    const aviso = await request(app)
+      .post('/api/avisos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Do admin', body: 'só o admin mexe' });
+    avisoDoAdminId = aviso.body.id;
+
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'gestora.sepo@test.local', senha: 'senha-gestora-1' });
+    expect(login.status).toBe(200);
+    expect(login.body.user.setores).toEqual(['SEPO']);
+    tokenGestor = login.body.token;
+  });
+
+  it('pessoas: cria/edita no próprio setor; fora dele é 403', async () => {
+    const auth = { Authorization: `Bearer ${tokenGestor}` };
+    const dentro = await request(app)
+      .post('/api/pessoas')
+      .set(auth)
+      .send({ name: 'Servidor do SEPO', departmentCode: 'SEPO', departmentFull: 'SEPO' });
+    expect(dentro.status).toBe(201);
+
+    const fora = await request(app)
+      .post('/api/pessoas')
+      .set(auth)
+      .send({ name: 'Servidor do IGPE', departmentCode: 'IGPE', departmentFull: 'IGPE' });
+    expect(fora.status).toBe(403);
+
+    const editaDentro = await request(app)
+      .put(`/api/pessoas/${dentro.body.id}`)
+      .set(auth)
+      .send({ phoneExtension: '4001' });
+    expect(editaDentro.status).toBe(200);
+
+    // mover a pessoa para fora dos seus setores também é bloqueado
+    const move = await request(app)
+      .put(`/api/pessoas/${dentro.body.id}`)
+      .set(auth)
+      .send({ departmentCode: 'IGPE' });
+    expect(move.status).toBe(403);
+
+    // pessoa de outro setor (Beltrana é do IGPE): bloqueada
+    const beltrana = (await request(app).get('/api/pessoas?busca=Beltrana')).body[0];
+    expect((await request(app).put(`/api/pessoas/${beltrana.id}`).set(auth).send({ cargo: 'X' })).status).toBe(403);
+  });
+
+  it('comunicados: publica e edita os próprios; os de outros é 403', async () => {
+    const auth = { Authorization: `Bearer ${tokenGestor}` };
+    const meu = await request(app).post('/api/avisos').set(auth).send({ title: 'Da gestora', body: 'aviso do setor' });
+    expect(meu.status).toBe(201);
+    expect(meu.body.autor).toBe('Gestora do SEPO');
+
+    expect((await request(app).put(`/api/avisos/${meu.body.id}`).set(auth).send({ body: 'revisado' })).status).toBe(200);
+    expect((await request(app).put(`/api/avisos/${avisoDoAdminId}`).set(auth).send({ body: 'invasão' })).status).toBe(403);
+    expect((await request(app).delete(`/api/avisos/${avisoDoAdminId}`).set(auth)).status).toBe(403);
+  });
+
+  it('rotas de administrador continuam vedadas ao gestor', async () => {
+    const auth = { Authorization: `Bearer ${tokenGestor}` };
+    expect((await request(app).get('/api/contas').set(auth)).status).toBe(403);
+    expect((await request(app).post('/api/setores').set(auth).send({ code: 'XX', name: 'X' })).status).toBe(403);
+    expect(
+      (await request(app).post('/api/tiles').set(auth).send({ label: 'X', icon: 'badge', cor: '#1e73be', url: 'https://x.gov.br' }))
+        .status,
+    ).toBe(403);
+    expect((await request(app).get('/api/auditoria').set(auth)).status).toBe(403);
+  });
+});
+
+describe('Auditoria', () => {
+  it('registra as ações e só o admin lê', async () => {
+    const token = await loginAdmin();
+    const r = await request(app).get('/api/auditoria').set('Authorization', `Bearer ${token}`);
+    expect(r.status).toBe(200);
+    expect(r.body.length).toBeGreaterThan(0);
+    const acoes = r.body.map((x: { acao: string; alvo: string; quem: string }) => `${x.quem}|${x.acao}|${x.alvo}`);
+    expect(acoes.some((a: string) => a.includes('publicou|comunicado'))).toBe(true);
+    expect(acoes.some((a: string) => a.includes('Gestora do SEPO|cadastrou|pessoa'))).toBe(true);
+    expect(acoes.some((a: string) => a.includes('entrou|sessão'))).toBe(true);
+
+    expect((await request(app).get('/api/auditoria')).status).toBe(401);
   });
 });
 

@@ -8,6 +8,7 @@ import { avatar, esc, escAttr, ico } from '../core/ui.js';
 
 const PAPEIS = {
   admin: { label: 'Administrador', badge: 'setor' },
+  gestor: { label: 'Gestor', badge: 'gestor' },
   viewer: { label: 'Somente leitura', badge: 'muted' },
 };
 
@@ -34,7 +35,7 @@ export async function renderContas(el, ctx) {
               return `<tr data-id="${c.id}">
                 <td><div class="cell-user">${avatar(c.name, { size: 34 })}
                   <div><div class="nome">${esc(c.name)}${eu ? ' <span style="font-size:11px;color:var(--muted-2)">(você)</span>' : ''}</div>
-                  ${c.mustChangePassword ? '<div style="font-size:12px;color:var(--amber)">troca de senha pendente</div>' : ''}</div></div></td>
+                  ${c.role === 'gestor' && c.setores?.length ? `<div style="font-size:12px;color:var(--muted-2)">${c.setores.join(', ')}</div>` : ''}${c.mustChangePassword ? '<div style="font-size:12px;color:var(--amber)">troca de senha pendente</div>' : ''}</div></div></td>
                 <td style="color:var(--muted)">${esc(c.email)}</td>
                 <td><span class="badge-role ${papel.badge}">${papel.label}</span></td>
                 <td>${
@@ -73,6 +74,7 @@ export async function renderContas(el, ctx) {
     const edicao = Boolean(c);
     let role = c?.role || 'admin';
     let ativo = c ? c.ativo : true;
+    const setoresSel = new Set(c?.setores ?? []);
     let trocar1 = edicao ? null : true; // criação: switch "trocar no 1º acesso"
 
     const ov = document.createElement('div');
@@ -92,11 +94,25 @@ export async function renderContas(el, ctx) {
             <div class="hint">Usado para entrar no sistema</div></div>
           <div class="field">
             <label>Papel de acesso</label>
-            <div class="seg">
-              <button type="button" class="seg-opt ${role === 'admin' ? 'is-on' : ''}" data-role="admin">Administrador</button>
-              <button type="button" class="seg-opt ${role === 'viewer' ? 'is-on' : ''}" data-role="viewer">Somente leitura</button>
+            <div class="seg" style="grid-template-columns:1fr 1fr 1fr">
+              <button type="button" class="seg-opt ${role === 'admin' ? 'is-on' : ''}" data-role="admin">Admin</button>
+              <button type="button" class="seg-opt ${role === 'gestor' ? 'is-on' : ''}" data-role="gestor">Gestor</button>
+              <button type="button" class="seg-opt ${role === 'viewer' ? 'is-on' : ''}" data-role="viewer">Leitura</button>
             </div>
-            <div class="hint">Administrador: gerencia pessoas, comunicados, links e contas</div>
+            <div class="hint">Admin: tudo · Gestor: pessoas dos seus setores + próprios comunicados · Leitura: não escreve</div>
+          </div>
+          <div class="field" id="f-setores" style="display:${role === 'gestor' ? 'block' : 'none'}">
+            <label>Setores do gestor</label>
+            <div class="setores-chips">
+              ${ctx.setores
+                .map(
+                  (d) => `<button type="button" class="chip-setor ${setoresSel.has(d.code) ? 'is-on' : ''}" data-code="${escAttr(
+                    d.code,
+                  )}">${esc(d.code)}</button>`,
+                )
+                .join('')}
+            </div>
+            <div class="hint">O gestor cadastra/edita apenas as pessoas destes setores</div>
           </div>
           ${
             edicao
@@ -136,6 +152,15 @@ export async function renderContas(el, ctx) {
       b.addEventListener('click', () => {
         role = b.dataset.role;
         ov.querySelectorAll('.seg-opt').forEach((x) => x.classList.toggle('is-on', x === b));
+        ov.querySelector('#f-setores').style.display = role === 'gestor' ? 'block' : 'none';
+      }),
+    );
+    ov.querySelectorAll('.chip-setor').forEach((b) =>
+      b.addEventListener('click', () => {
+        const code = b.dataset.code;
+        if (setoresSel.has(code)) setoresSel.delete(code);
+        else setoresSel.add(code);
+        b.classList.toggle('is-on', setoresSel.has(code));
       }),
     );
     ov.querySelector('#sw-ativo')?.addEventListener('click', (e) => {
@@ -163,14 +188,19 @@ export async function renderContas(el, ctx) {
         alert('Preencha nome e e-mail.');
         return;
       }
+      if (role === 'gestor' && setoresSel.size === 0) {
+        alert('Selecione pelo menos um setor para o gestor.');
+        return;
+      }
+      const setores = role === 'gestor' ? [...setoresSel] : [];
       acaoAdmin(ctx, async () => {
         if (edicao) {
-          await api(`/contas/${c.id}`, { method: 'PUT', body: JSON.stringify({ name, email, role, ativo }) });
+          await api(`/contas/${c.id}`, { method: 'PUT', body: JSON.stringify({ name, email, role, ativo, setores }) });
         } else {
           const senha = ov.querySelector('[name=senha]').value;
           await api('/contas', {
             method: 'POST',
-            body: JSON.stringify({ name, email, senha, role, mustChangePassword: trocar1 }),
+            body: JSON.stringify({ name, email, senha, role, setores, mustChangePassword: trocar1 }),
           });
         }
         fechar();

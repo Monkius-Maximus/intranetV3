@@ -6,10 +6,12 @@ const PAGE_SIZE = 8;
 
 // Console de pessoas/ramais. Serve as duas vistas do redesign:
 //   • Ramais (público, somente leitura) — todo servidor consulta o diretório.
-//   • Pessoas (admin) — CRUD completo (console 3a + drawer 3b + confirmação).
-// A distinção é `manage`: no console do admin aparecem ações, "Novo" e o drawer.
+//   • Pessoas (admin/gestor) — CRUD (console 3a + drawer 3b + confirmação).
+// A distinção é `manage`: no console de gestão aparecem ações, "Novo" e o drawer.
 export async function renderPessoas(el, ctx, { manage = false } = {}) {
-  const admin = manage && ctx.admin;
+  const gestao = manage && ctx.gestao;
+  // gestor só mexe nas pessoas dos SEUS setores (admin em todas)
+  const podeSetor = (code) => ctx.admin || Boolean(code && (ctx.usuario?.setores ?? []).includes(code));
   const estado = {
     busca: ctx.buscaInicial || '',
     setor: '',
@@ -23,14 +25,14 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   el.innerHTML = `
     <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px">
       <div>
-        <h1 class="page-title">${admin ? 'Pessoas' : 'Ramais'}</h1>
+        <h1 class="page-title">${gestao ? 'Pessoas' : 'Ramais'}</h1>
         <p class="page-sub" style="margin:4px 0 0">${
-          admin ? 'Diretório de servidores — cadastro, setores e aniversários' : 'Diretório de servidores, setores e ramais'
+          gestao ? 'Diretório de servidores — cadastro, setores e aniversários' : 'Diretório de servidores, setores e ramais'
         }</p>
       </div>
       <div style="display:flex;gap:10px">
-        ${admin ? `<button class="btn btn-ghost gerir-setores">${ico('apartment', { size: 18 })} Setores</button>` : ''}
-        ${admin ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
+        ${ctx.admin ? `<button class="btn btn-ghost gerir-setores">${ico('apartment', { size: 18 })} Setores</button>` : ''}
+        ${gestao ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
       </div>
     </div>
 
@@ -113,7 +115,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
       <table class="data-table">
         <thead><tr>
           <th>Pessoa</th><th>Setor</th><th>Ramal</th><th>E-mail</th><th>Aniversário</th><th>Status</th>
-          ${admin ? '<th></th>' : ''}
+          ${gestao ? '<th></th>' : ''}
         </tr></thead>
         <tbody>
           ${pagina
@@ -133,13 +135,17 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
                 <td style="color:var(--muted)">${aniversario(p)}</td>
                 <td>${st(p)}</td>
                 ${
-                  admin
-                    ? `<td><div class="row-actions">
-                        <button class="row-btn edit" data-id="${p.id}" title="Editar">${ico('edit', { size: 19 })}</button>
-                        <button class="row-btn danger del" data-id="${p.id}" title="Excluir">${ico('delete', {
-                        size: 19,
-                      })}</button>
-                      </div></td>`
+                  gestao
+                    ? `<td>${
+                        podeSetor(p.departmentCode)
+                          ? `<div class="row-actions">
+                              <button class="row-btn edit" data-id="${p.id}" title="Editar">${ico('edit', { size: 19 })}</button>
+                              <button class="row-btn danger del" data-id="${p.id}" title="Excluir">${ico('delete', {
+                              size: 19,
+                            })}</button>
+                            </div>`
+                          : `<span style="font-size:11px;color:var(--faint)" title="Fora dos seus setores">—</span>`
+                      }</td>`
                     : ''
                 }
               </tr>`,
@@ -174,7 +180,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
       }),
     );
 
-    if (!admin) return;
+    if (!gestao) return;
     elTabela.querySelectorAll('.edit').forEach((b) =>
       b.addEventListener('click', () => {
         const p = estado.filtradas.find((x) => String(x.id) === b.dataset.id);
@@ -348,6 +354,8 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   function abrirDrawer(p) {
     const edicao = Boolean(p);
     let status = p?.status || 'ativo';
+    // gestor: só os setores dele no select (e sem a opção "Sem setor")
+    const setoresDrawer = ctx.admin ? ctx.setores : ctx.setores.filter((d) => podeSetor(d.code));
     const ov = document.createElement('div');
     ov.className = 'overlay';
     ov.innerHTML = `
@@ -364,8 +372,8 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
             <input name="cargo" placeholder="Ex.: Analista de Gestão" value="${p ? escAttr(p.cargo || '') : ''}" /></div>
           <div class="field"><label>Setor</label>
             <select name="departmentCode">
-              <option value="">Sem setor</option>
-              ${ctx.setores
+              ${ctx.admin ? '<option value="">Sem setor</option>' : ''}
+              ${setoresDrawer
                 .map(
                   (d) =>
                     `<option value="${escAttr(d.code)}" ${

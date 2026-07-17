@@ -39,6 +39,7 @@ function tokenPara(u: Usuario): string {
     email: u.email,
     role: u.role,
     name: u.name,
+    ...(u.role === 'gestor' ? { setores: u.setores ?? [] } : {}),
     ...(u.mustChangePassword ? { mcp: true } : {}),
   });
 }
@@ -69,6 +70,7 @@ export function montarAuth(repo: Repositorio): Router {
       return;
     }
     tentativas.delete(chave);
+    await repo.auditoria.registrar({ quemId: u.id, quem: u.name, acao: 'entrou', alvo: 'sessão', detalhe: u.email });
     res.json({ token: tokenPara(u), user: paraPublico(u) });
   });
 
@@ -98,6 +100,7 @@ export function montarAuth(repo: Repositorio): Router {
       passwordHash: hashPassword(novaSenha),
       mustChangePassword: false,
     });
+    await repo.auditoria.registrar({ quemId: u.id, quem: u.name, acao: 'trocou a senha', alvo: 'conta', detalhe: u.email });
     res.json({ token: tokenPara(novo), user: paraPublico(novo) });
   });
 

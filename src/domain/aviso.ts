@@ -5,6 +5,15 @@ import { z } from 'zod';
 export const CATEGORIAS_AVISO = ['geral', 'ti', 'rh', 'urgente'] as const;
 export type CategoriaAviso = (typeof CATEGORIAS_AVISO)[number];
 
+// Anexo de comunicado. `arquivo` é o nome gerado no disco (data/uploads/);
+// `nome` é o nome original mostrado/baixado.
+export interface Anexo {
+  id: number;
+  nome: string;
+  arquivo: string;
+  tamanho: number; // bytes
+}
+
 export interface Aviso {
   id: number;
   title: string;
@@ -12,6 +21,7 @@ export interface Aviso {
   pinned: boolean;
   categoria: CategoriaAviso;
   autor: string | null; // nome de quem publicou (denormalizado do token)
+  anexos: Anexo[];
   createdBy: number | null;
   createdAt: string;
 }

@@ -1,4 +1,5 @@
-import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
+import type { RegistroAuditoria } from '../domain/auditoria';
+import type { Anexo, Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departamento';
 import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
@@ -58,9 +59,17 @@ export interface RepoEventos {
 
 export interface RepoAvisos {
   listar(): Promise<Aviso[]>;
+  obter(id: number): Promise<Aviso | undefined>;
   criar(dados: DadosNovoAviso & { createdBy: number | null; autor: string | null }): Promise<Aviso>;
   atualizar(id: number, patch: PatchAviso): Promise<Aviso>;
   remover(id: number): Promise<Aviso>;
+  adicionarAnexo(avisoId: number, anexo: Omit<Anexo, 'id'>): Promise<Aviso>;
+  removerAnexo(avisoId: number, anexoId: number): Promise<Anexo>;
+}
+
+export interface RepoAuditoria {
+  registrar(reg: Omit<RegistroAuditoria, 'id' | 'quando'>): Promise<void>;
+  listar(limite?: number): Promise<RegistroAuditoria[]>;
 }
 
 export interface RepoNavegacao {
@@ -74,9 +83,9 @@ export interface RepoNavegacao {
   contarGrupos(): Promise<number>;
 }
 
-// Criação de conta: ativo/mustChangePassword têm padrão (true/false).
-export type DadosNovoUsuario = Omit<Usuario, 'id' | 'ativo' | 'mustChangePassword'> &
-  Partial<Pick<Usuario, 'ativo' | 'mustChangePassword'>>;
+// Criação de conta: ativo/mustChangePassword/setores têm padrão.
+export type DadosNovoUsuario = Omit<Usuario, 'id' | 'ativo' | 'mustChangePassword' | 'setores'> &
+  Partial<Pick<Usuario, 'ativo' | 'mustChangePassword' | 'setores'>>;
 
 export interface RepoUsuarios {
   listar(): Promise<Usuario[]>;
@@ -97,4 +106,5 @@ export interface Repositorio {
   usuarios: RepoUsuarios;
   tiles: RepoTiles;
   eventos: RepoEventos;
+  auditoria: RepoAuditoria;
 }

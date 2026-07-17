@@ -564,6 +564,51 @@ button {
   color: var(--muted-2);
   font-size: 12px;
 }
+.anexos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 9px;
+}
+.anexo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-2);
+  max-width: 260px;
+}
+.anexo-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.anexo-chip .n {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anexo-chip .t {
+  color: var(--faint);
+  flex: 0 0 auto;
+}
+.anexo-chip.novo {
+  border-style: dashed;
+}
+.anexo-chip button {
+  border: none;
+  background: none;
+  color: var(--faint);
+  padding: 0;
+  display: flex;
+}
+.anexo-chip button:hover {
+  color: var(--danger);
+}
 .aviso-actions {
   display: flex;
   gap: 6px;
@@ -872,6 +917,10 @@ button {
   color: var(--muted);
   background: var(--line);
 }
+.badge-role.gestor {
+  color: var(--green);
+  background: #e8f6ee;
+}
 .status {
   display: inline-flex;
   align-items: center;
@@ -1136,6 +1185,25 @@ button {
   color: var(--accent);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1);
+}
+.setores-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.chip-setor {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.chip-setor.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .switch-row {
   display: flex;

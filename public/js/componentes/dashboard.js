@@ -12,16 +12,16 @@ import { renderEventosCard } from './eventos.js';
 export async function renderDashboard(el, ctx) {
   const [avisos, pessoas] = await Promise.all([
     api('/avisos').catch(() => []),
-    ctx.admin ? api('/pessoas').catch(() => []) : Promise.resolve([]),
+    ctx.gestao ? api('/pessoas').catch(() => []) : Promise.resolve([]),
   ]);
 
-  const nome = ctx.usuario?.name || (ctx.admin ? 'Administrador' : '');
+  const nome = ctx.usuario?.name || (ctx.gestao ? 'Administrador' : '');
   const subAdmin = 'Você tem permissões de gestão neste ambiente';
   const subUser = `${dataLonga()} — ${avisos.length} comunicado${avisos.length === 1 ? '' : 's'}`;
 
   el.innerHTML = `
     <h1 class="page-title">${saudacao()}${nome ? `, ${esc(nome)}` : ''}</h1>
-    <p class="page-sub">${ctx.admin ? subAdmin : subUser}</p>
+    <p class="page-sub">${ctx.gestao ? subAdmin : subUser}</p>
 
     <div class="section-label">Acesso rápido</div>
     <div class="tiles" id="dash-tiles"></div>
@@ -31,7 +31,7 @@ export async function renderDashboard(el, ctx) {
         <div class="section-head">
           <div class="section-label" style="margin:0">Comunicados</div>
           ${
-            ctx.admin
+            ctx.gestao
               ? `<button class="btn btn-primary btn-sm novo-aviso">${ico('add', { size: 17 })} Novo comunicado</button>`
               : '<button class="link-ver ver-todos">Ver todos</button>'
           }
@@ -39,9 +39,9 @@ export async function renderDashboard(el, ctx) {
         <div class="col" id="dash-avisos"></div>
       </div>
       <div>
-        <div class="section-label">${ctx.admin ? 'Painel administrativo' : 'Agenda'}</div>
+        <div class="section-label">${ctx.gestao ? 'Painel de gestão' : 'Agenda'}</div>
         <div class="col">
-          ${ctx.admin ? `<div class="mini-card" id="dash-painel"></div>` : ''}
+          ${ctx.gestao ? `<div class="mini-card" id="dash-painel"></div>` : ''}
           <div class="mini-card" id="dash-eventos"></div>
           <div class="mini-card" id="dash-aniv"></div>
           <div class="mini-card" id="dash-links"></div>

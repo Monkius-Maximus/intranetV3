@@ -1,8 +1,11 @@
 # Intranet SEPLAG
 
-Aplicação web interna da SEPLAG: **diretório de funcionários/ramais**, comunicados
-e links úteis. O usuário comum **não faz login** — consulta o diretório direto;
-o **login existe só para o administrador** gerenciar as pessoas e comunicados.
+Aplicação web interna da SEPLAG: **diretório de funcionários/ramais**,
+comunicados (com anexos), agenda e links úteis. O usuário comum **não faz
+login** — consulta tudo direto. Contas de acesso têm três papéis:
+**admin** (gerencia tudo, incluindo contas, setores, tiles e auditoria),
+**gestor** (gerencia as pessoas dos seus setores e os próprios comunicados)
+e **leitura**. Toda edição vale imediatamente — sem reiniciar o serviço.
 
 Arquitetura enxuta, no mesmo formato do projeto de Sistemas Distribuídos da equipe:
 **um único servidor Express** que serve a interface web **e** a API REST, com

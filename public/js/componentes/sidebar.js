@@ -10,10 +10,13 @@ const ITENS = [
   { key: 'ramais', label: 'Ramais', icon: 'contacts' },
   { key: 'aniversariantes', label: 'Aniversariantes', icon: 'cake' },
 ];
-const ITENS_ADMIN = [
+const ITENS_GESTAO = [
   { key: 'usuarios', label: 'Pessoas', icon: 'group' },
   { key: 'gerenciar-comunicados', label: 'Gerenciar comunicados', icon: 'edit_note' },
+];
+const ITENS_ADMIN = [
   { key: 'contas', label: 'Contas de acesso', icon: 'shield_person' },
+  { key: 'auditoria', label: 'Auditoria', icon: 'history' },
 ];
 
 // A view atual pode não ser exatamente a chave do menu (ex.: novo-comunicado
@@ -38,18 +41,21 @@ export function renderSidebar(el, ctx) {
     <nav class="sidebar-nav">
       ${ITENS.map(item).join('')}
       ${
-        ctx.admin
-          ? `<div class="nav-group-label">Administração</div>${ITENS_ADMIN.map(item).join('')}`
+        ctx.gestao
+          ? `<div class="nav-group-label">${ctx.admin ? 'Administração' : 'Gestão'}</div>${ITENS_GESTAO.map(item).join('')}`
           : ''
       }
+      ${ctx.admin ? ITENS_ADMIN.map(item).join('') : ''}
     </nav>
     <div class="sidebar-foot">
       ${
-        ctx.admin
+        ctx.gestao
           ? `<div class="user-chip">
               ${avatar(ctx.usuario?.name || 'Administrador', { size: 36 })}
               <div class="meta"><div class="nome">${esc(ctx.usuario?.name || 'Administrador')}</div>
-                <div class="papel admin">${ctx.usuario?.role === 'admin' ? 'admin' : 'leitura'}</div></div>
+                <div class="papel admin">${
+                  { admin: 'admin', gestor: 'gestor', viewer: 'leitura' }[ctx.usuario?.role] || ''
+                }</div></div>
               <button class="chip-logout trocar-senha" title="Trocar senha">${ico('key', { size: 19 })}</button>
               <button class="chip-logout" title="Sair">${ico('logout', { size: 20 })}</button>
             </div>`

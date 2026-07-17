@@ -6,6 +6,7 @@ import { renderComunicados, renderNovoComunicado } from './componentes/avisos.js
 import { renderPessoas } from './componentes/contatos.js';
 import { renderAniversariantesPagina } from './componentes/aniversariantes.js';
 import { abrirTrocaDeSenha, renderContas } from './componentes/contas.js';
+import { renderAuditoria } from './componentes/auditoria.js';
 
 const appEl = document.querySelector('#app');
 
@@ -17,13 +18,17 @@ const state = {
 };
 
 const isAdmin = () => state.usuario?.role === 'admin';
+const isGestor = () => state.usuario?.role === 'gestor';
 
-// Views que só o admin acessa; se pedidas sem sessão, caem no início.
-const VIEWS_ADMIN = new Set(['usuarios', 'gerenciar-comunicados', 'novo-comunicado', 'contas']);
+// Views restritas por papel; pedidas sem permissão, caem no início.
+const VIEWS_GESTAO = new Set(['usuarios', 'gerenciar-comunicados', 'novo-comunicado']);
+const VIEWS_ADMIN = new Set(['contas', 'auditoria']);
 
 function montarCtx() {
   return {
     admin: isAdmin(),
+    gestor: isGestor(),
+    gestao: isAdmin() || isGestor(), // quem entra no "modo gestão" da UI
     usuario: state.usuario,
     view: state.view,
     setores: state.setores,
@@ -52,6 +57,7 @@ function montarCtx() {
 
 function navegar(view, params = {}) {
   if (VIEWS_ADMIN.has(view) && !isAdmin()) view = 'inicio';
+  if (VIEWS_GESTAO.has(view) && !isAdmin() && !isGestor()) view = 'inicio';
   state.view = view;
   state.params = params;
   renderShell();
@@ -68,7 +74,7 @@ function sair() {
 function renderShell() {
   const ctx = montarCtx();
   appEl.innerHTML = `
-    <div class="shell ${ctx.admin ? 'is-admin' : ''}">
+    <div class="shell ${ctx.gestao ? 'is-admin' : ''}">
       <aside class="sidebar" id="sidebar"></aside>
       <div class="main">
         <header class="topbar" id="topbar"></header>
@@ -89,7 +95,7 @@ function renderTopbar(el, ctx) {
     </div>
     <div class="topbar-spacer"></div>
     ${
-      ctx.admin
+      ctx.gestao
         ? `<button class="icon-btn" title="Notificações">${ico('notifications', {
             size: 21,
           })}<span class="dot"></span></button>
@@ -120,6 +126,8 @@ function renderView(el, ctx) {
       return renderPessoas(el, ctx, { manage: true });
     case 'contas':
       return renderContas(el, ctx);
+    case 'auditoria':
+      return renderAuditoria(el, ctx);
     case 'novo-comunicado':
       return renderNovoComunicado(el, ctx, { editar: state.params.editar || null });
     case 'inicio':

@@ -2,6 +2,7 @@ import { criarGravador, lerJson } from './arquivoJson';
 import type {
   DadosNovoUsuario,
   FiltroPessoa,
+  RepoAuditoria,
   RepoAvisos,
   RepoDepartamentos,
   RepoEventos,
@@ -12,7 +13,8 @@ import type {
   Repositorio,
 } from './repositorio';
 import { EmUso, JaExiste, NaoEncontrado } from '../domain/erros';
-import type { Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
+import { AUDITORIA_MAXIMO, type RegistroAuditoria } from '../domain/auditoria';
+import type { Anexo, Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departamento';
 import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
@@ -29,6 +31,7 @@ interface Doc {
   usuarios: Usuario[];
   tiles: Tile[];
   eventos: Evento[];
+  auditoria: RegistroAuditoria[];
   seq: Record<string, number>;
 }
 
@@ -42,6 +45,7 @@ function docVazio(): Doc {
     usuarios: [],
     tiles: [],
     eventos: [],
+    auditoria: [],
     seq: {},
   };
 }
@@ -55,6 +59,7 @@ function normalizar(t: string): string {
 function normalizarUsuario(u: Usuario): Usuario {
   u.ativo = u.ativo !== false;
   u.mustChangePassword = u.mustChangePassword === true;
+  u.setores ??= [];
   return u;
 }
 
@@ -72,9 +77,11 @@ export class RepositorioJson implements Repositorio {
 
   async iniciar(): Promise<void> {
     this.doc = await lerJson<Doc>(this.caminho, docVazio());
-    // Bancos gravados por versões anteriores não têm as coleções novas.
+    // Bancos gravados por versões anteriores não têm as coleções/campos novos.
     this.doc.tiles ??= [];
     this.doc.eventos ??= [];
+    this.doc.auditoria ??= [];
+    for (const a of this.doc.avisos) a.anexos ??= [];
   }
 
   private persistir(): Promise<void> {
@@ -255,6 +262,7 @@ export class RepositorioJson implements Repositorio {
       [...this.doc.avisos].sort(
         (a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt),
       ),
+    obter: async (id) => this.doc.avisos.find((x) => x.id === id),
     criar: async (dados: DadosNovoAviso & { createdBy: number | null; autor: string | null }) => {
       const a: Aviso = {
         id: this.proximoId('avisos'),
@@ -263,6 +271,7 @@ export class RepositorioJson implements Repositorio {
         pinned: Boolean(dados.pinned),
         categoria: dados.categoria,
         autor: dados.autor,
+        anexos: [],
         createdBy: dados.createdBy,
         createdAt: new Date().toISOString(),
       };
@@ -284,6 +293,37 @@ export class RepositorioJson implements Repositorio {
       await this.persistir();
       return a;
     },
+    adicionarAnexo: async (avisoId, anexo: Omit<Anexo, 'id'>) => {
+      const a = this.doc.avisos.find((x) => x.id === avisoId);
+      if (!a) throw new NaoEncontrado('comunicado não encontrado');
+      a.anexos.push({ id: this.proximoId('anexos'), ...anexo });
+      await this.persistir();
+      return a;
+    },
+    removerAnexo: async (avisoId, anexoId) => {
+      const a = this.doc.avisos.find((x) => x.id === avisoId);
+      if (!a) throw new NaoEncontrado('comunicado não encontrado');
+      const i = a.anexos.findIndex((x) => x.id === anexoId);
+      if (i < 0) throw new NaoEncontrado('anexo não encontrado');
+      const [anexo] = a.anexos.splice(i, 1);
+      await this.persistir();
+      return anexo;
+    },
+  };
+
+  auditoria: RepoAuditoria = {
+    registrar: async (reg) => {
+      this.doc.auditoria.push({
+        id: this.proximoId('auditoria'),
+        quando: new Date().toISOString(),
+        ...reg,
+      });
+      if (this.doc.auditoria.length > AUDITORIA_MAXIMO) {
+        this.doc.auditoria.splice(0, this.doc.auditoria.length - AUDITORIA_MAXIMO);
+      }
+      await this.persistir();
+    },
+    listar: async (limite = 200) => [...this.doc.auditoria].reverse().slice(0, limite),
   };
 
   navegacao: RepoNavegacao = {
@@ -372,6 +412,7 @@ export class RepositorioJson implements Repositorio {
         id: this.proximoId('usuarios'),
         ativo: true,
         mustChangePassword: false,
+        setores: [],
         ...dados,
       };
       this.doc.usuarios.push(u);

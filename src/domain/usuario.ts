@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
-// Papéis de acesso. 'admin' gerencia tudo; 'viewer' loga mas não escreve
-// (reservado para papéis mais finos no futuro, ex.: gestor por setor).
-export type Papel = 'admin' | 'viewer';
+// Papéis de acesso:
+//   admin  — gerencia tudo (pessoas, comunicados, tiles, setores, contas…)
+//   gestor — gerencia as PESSOAS dos seus setores e os PRÓPRIOS comunicados
+//   viewer — loga mas não escreve
+export type Papel = 'admin' | 'gestor' | 'viewer';
 
 export interface Usuario {
   id: number;
@@ -10,6 +12,7 @@ export interface Usuario {
   passwordHash: string;
   role: Papel;
   name: string;
+  setores: string[]; // siglas que um GESTOR administra (vazio p/ demais papéis)
   ativo: boolean; // desativada = não loga (mantém histórico)
   mustChangePassword: boolean; // exige trocar a senha no próximo login
 }
@@ -20,6 +23,7 @@ export interface UsuarioPublico {
   email: string;
   role: Papel;
   name: string;
+  setores: string[];
   ativo: boolean;
   mustChangePassword: boolean;
 }
@@ -30,6 +34,7 @@ export function paraPublico(u: Usuario): UsuarioPublico {
     email: u.email,
     role: u.role,
     name: u.name,
+    setores: u.setores ?? [],
     ativo: u.ativo !== false, // contas antigas (sem o campo) contam como ativas
     mustChangePassword: u.mustChangePassword === true,
   };
@@ -38,12 +43,16 @@ export function paraPublico(u: Usuario): UsuarioPublico {
 // ----------------------------------------------------------------- validação
 const email = z.string().trim().toLowerCase().min(3).max(255);
 const senha = z.string().min(8, 'a senha precisa de pelo menos 8 caracteres').max(255);
+const setores = z
+  .array(z.string().trim().min(1).max(20).transform((s) => s.toUpperCase()))
+  .max(50);
 
 export const criarContaSchema = z.object({
   name: z.string().trim().min(1).max(255),
   email,
   senha,
-  role: z.enum(['admin', 'viewer']).default('admin'),
+  role: z.enum(['admin', 'gestor', 'viewer']).default('admin'),
+  setores: setores.default([]),
   mustChangePassword: z.boolean().default(true), // padrão seguro: troca no 1º acesso
 });
 
@@ -52,7 +61,8 @@ export const atualizarContaSchema = z
   .object({
     name: z.string().trim().min(1).max(255),
     email,
-    role: z.enum(['admin', 'viewer']),
+    role: z.enum(['admin', 'gestor', 'viewer']),
+    setores,
     ativo: z.boolean(),
   })
   .partial();

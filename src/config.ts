@@ -22,6 +22,9 @@ export function caminhoBanco(): string {
   return process.env.INTRANET_DB ?? join(DATA_DIR, 'intranet.json');
 }
 
+// Anexos de comunicados (fora do git, junto do banco — viaja no backup da pasta).
+export const UPLOADS_DIR = join(DATA_DIR, 'uploads');
+
 function garantirDir(dir: string): void {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });

@@ -1,5 +1,24 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { z } from 'zod';
+import type { AuthedRequest } from '../auth';
+import type { Repositorio } from '../data/repositorio';
+
+// Registra uma ação na trilha de auditoria (quem vem do token da requisição).
+export async function auditar(
+  repo: Repositorio,
+  req: AuthedRequest,
+  acao: string,
+  alvo: string,
+  detalhe: string,
+): Promise<void> {
+  await repo.auditoria.registrar({
+    quemId: req.user?.sub ?? null,
+    quem: req.user?.name ?? 'desconhecido',
+    acao,
+    alvo,
+    detalhe,
+  });
+}
 
 // Middleware único de validação de formato (uma forma só de validar).
 export function validar<T extends z.ZodType>(schema: T) {

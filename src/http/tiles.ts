@@ -3,7 +3,7 @@ import { autenticar, exigirAdmin } from '../auth';
 import type { Repositorio } from '../data/repositorio';
 import { reordenarSchema } from '../domain/navegacao';
 import { atualizarTileSchema, CORES_TILE, criarTileSchema, ICONES_TILE } from '../domain/tile';
-import { idParam, validar } from './util';
+import { auditar, idParam, validar } from './util';
 
 // Tiles de "Acesso rápido" — leitura pública (montam o dashboard); gestão
 // (criar/editar/reordenar/excluir) só para o admin.
@@ -20,7 +20,9 @@ export function montarTiles(repo: Repositorio): Router {
   });
 
   r.post('/', autenticar, exigirAdmin, validar(criarTileSchema), async (req, res) => {
-    res.status(201).json(await repo.tiles.criar(req.body));
+    const tile = await repo.tiles.criar(req.body);
+    await auditar(repo, req, 'criou', 'tile', tile.label);
+    res.status(201).json(tile);
   });
 
   r.put('/ordem', autenticar, exigirAdmin, validar(reordenarSchema), async (req, res) => {
@@ -31,13 +33,16 @@ export function montarTiles(repo: Repositorio): Router {
   r.put('/:id', autenticar, exigirAdmin, validar(atualizarTileSchema), async (req, res) => {
     const id = idParam(req, res);
     if (id === null) return;
-    res.json(await repo.tiles.atualizar(id, req.body));
+    const tile = await repo.tiles.atualizar(id, req.body);
+    await auditar(repo, req, 'editou', 'tile', tile.label);
+    res.json(tile);
   });
 
   r.delete('/:id', autenticar, exigirAdmin, async (req, res) => {
     const id = idParam(req, res);
     if (id === null) return;
     await repo.tiles.remover(id);
+    await auditar(repo, req, 'excluiu', 'tile', `id ${id}`);
     res.json({ ok: true });
   });
 

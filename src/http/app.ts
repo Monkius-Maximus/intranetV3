@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { Repositorio } from '../data/repositorio';
 import { EmUso, FalhaDeGravacao, JaExiste, NaoEncontrado } from '../domain/erros';
+import { montarAuditoria } from './auditoria';
 import { montarAuth } from './auth';
 import { montarAvisos } from './avisos';
 import { montarContas } from './contas';
@@ -32,6 +33,7 @@ export function criarApp(repo: Repositorio): express.Express {
   app.use('/api/navegacao', montarNavegacao(repo));
   app.use('/api/tiles', montarTiles(repo));
   app.use('/api/eventos', montarEventos(repo));
+  app.use('/api/auditoria', montarAuditoria(repo));
 
   app.use((_req, res) => {
     res.status(404).json({ erro: 'recurso não encontrado' });

@@ -14,7 +14,8 @@ export class NaoAutenticado extends Error {
 // Cliente HTTP único. Leitura é pública; ações de admin mandam o token.
 export async function api(path, options = {}) {
   const headers = new Headers(options.headers);
-  if (options.body) headers.set('Content-Type', 'application/json');
+  // FormData (upload) define o próprio Content-Type (multipart + boundary).
+  if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 

@@ -9,6 +9,7 @@ export interface TokenPayload {
   email: string;
   role: Papel;
   name: string;
+  setores?: string[]; // siglas administradas (papel gestor)
   mcp?: boolean; // troca de senha pendente: só pode trocar a senha até resolver
 }
 
@@ -46,14 +47,37 @@ export function autenticar(req: AuthedRequest, res: Response, next: NextFunction
   }
 }
 
+function senhaPendente(req: AuthedRequest, res: Response): boolean {
+  if (req.user?.mcp) {
+    res.status(403).json({ erro: 'troca de senha pendente — defina uma nova senha antes de continuar' });
+    return true;
+  }
+  return false;
+}
+
 export function exigirAdmin(req: AuthedRequest, res: Response, next: NextFunction): void {
   if (req.user?.role !== 'admin') {
     res.status(403).json({ erro: 'acesso restrito a administradores' });
     return;
   }
-  if (req.user.mcp) {
-    res.status(403).json({ erro: 'troca de senha pendente — defina uma nova senha antes de continuar' });
+  if (senhaPendente(req, res)) return;
+  next();
+}
+
+// Admin ou gestor (os papéis que escrevem). A checagem de ESCOPO do gestor
+// (quais setores / quais comunicados) é feita em cada rota.
+export function exigirGestao(req: AuthedRequest, res: Response, next: NextFunction): void {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'gestor') {
+    res.status(403).json({ erro: 'acesso restrito à gestão' });
     return;
   }
+  if (senhaPendente(req, res)) return;
   next();
+}
+
+// Escopo do gestor sobre um setor (admins passam sempre).
+export function gerenciaSetor(user: TokenPayload | undefined, code: string | null): boolean {
+  if (user?.role === 'admin') return true;
+  if (user?.role !== 'gestor') return false;
+  return code !== null && (user.setores ?? []).includes(code);
 }

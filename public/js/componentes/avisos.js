@@ -1,6 +1,6 @@
 import { api } from '../core/api.js';
 import { acaoAdmin } from '../core/dom.js';
-import { dataAviso, esc, ico } from '../core/ui.js';
+import { dataAviso, esc, escAttr, ico } from '../core/ui.js';
 
 // Categorias de comunicado: rótulo + cor do color-coding (herdado do 1c).
 // A categoria vem do banco; o fallback 'geral' cobre registros antigos.
@@ -12,9 +12,26 @@ export const CATEGORIAS = {
 };
 const categoriaDe = (a) => CATEGORIAS[a.categoria] || CATEGORIAS.geral;
 
+// O gestor só gerencia os PRÓPRIOS comunicados; o admin, todos (o backend
+// impõe a mesma regra — isto controla só o que aparece).
+const podeGerir = (a, ctx) => ctx.admin || (ctx.gestor && a.createdBy === ctx.usuario?.id);
+
+const tamanhoLegivel = (b) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} kB`);
+
+function chipsAnexos(a) {
+  if (!a.anexos?.length) return '';
+  return `<div class="anexos">${a.anexos
+    .map(
+      (x) => `<a class="anexo-chip" href="/api/avisos/${a.id}/anexos/${x.id}/download" title="${escAttr(x.nome)}">
+        ${ico('attach_file', { size: 15 })}<span class="n">${esc(x.nome)}</span><span class="t">${tamanhoLegivel(x.tamanho)}</span>
+      </a>`,
+    )
+    .join('')}</div>`;
+}
+
 function cardComunicado(a, ctx) {
   const cat = categoriaDe(a);
-  const acoes = ctx.admin
+  const acoes = podeGerir(a, ctx)
     ? `<div class="aviso-actions">
         <button class="icon-square edit-aviso" data-id="${a.id}" title="Editar">${ico('edit', { size: 18 })}</button>
         <button class="icon-square danger del-aviso" data-id="${a.id}" title="Excluir">${ico('delete', { size: 18 })}</button>
@@ -22,7 +39,7 @@ function cardComunicado(a, ctx) {
     : '';
   return `<article class="aviso-card" style="--aviso-accent:${cat.cor}">
     <div class="aviso-top">
-      <div style="min-width:0">
+      <div style="min-width:0;flex:1">
         <div class="aviso-tags">
           ${a.pinned ? '<span class="tag-fixado">FIXADO</span>' : ''}
           <span class="tag-categoria" style="--cat-cor:${cat.cor}">${esc(cat.label)}</span>
@@ -30,6 +47,7 @@ function cardComunicado(a, ctx) {
         </div>
         <h3>${esc(a.title)}</h3>
         <p>${esc(a.body)}</p>
+        ${chipsAnexos(a)}
         <small>${esc(a.autor || 'Administrador do Sistema')}</small>
       </div>
       ${acoes}
@@ -37,9 +55,9 @@ function cardComunicado(a, ctx) {
   </article>`;
 }
 
-// Fios de admin comuns às listas de comunicados (editar/excluir).
+// Fios de gestão comuns às listas de comunicados (editar/excluir).
 function ligarAcoes(el, itens, ctx, recarregar) {
-  if (!ctx.admin) return;
+  if (!ctx.gestao) return;
   el.querySelectorAll('.del-aviso').forEach((b) =>
     b.addEventListener('click', () => {
       if (!confirm('Excluir este comunicado?')) return;
@@ -72,16 +90,16 @@ export async function renderComunicadosPreview(el, ctx) {
 // editar, excluir) — a seção "Comunicados" é só leitura; "Gerenciar
 // comunicados" é a gestão.
 export async function renderComunicados(el, ctx, { manage = true } = {}) {
-  const c = { ...ctx, admin: ctx.admin && manage };
+  const c = { ...ctx, admin: ctx.admin && manage, gestor: ctx.gestor && manage, gestao: ctx.gestao && manage };
   const itens = await api('/avisos');
   el.innerHTML = `
     <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px">
       <div>
-        <h1 class="page-title">${manage && ctx.admin ? 'Gerenciar comunicados' : 'Comunicados'}</h1>
+        <h1 class="page-title">${manage && ctx.gestao ? 'Gerenciar comunicados' : 'Comunicados'}</h1>
         <p class="page-sub" style="margin:4px 0 0">${itens.length} comunicado(s) publicado(s)</p>
       </div>
       ${
-        c.admin
+        c.gestao
           ? `<button class="btn btn-primary novo-aviso">${ico('add', { size: 18 })} Novo comunicado</button>`
           : ''
       }
@@ -100,6 +118,8 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
   const edicao = Boolean(editar);
   let fixar = editar ? Boolean(editar.pinned) : true;
   const categoriaInicial = editar?.categoria && CATEGORIAS[editar.categoria] ? editar.categoria : 'geral';
+  const novosArquivos = []; // File[] a enviar após salvar
+  const anexosAtuais = [...(editar?.anexos ?? [])];
 
   el.innerHTML = `
     <div class="crumbs">
@@ -132,6 +152,14 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
               editar ? esc(editar.body) : ''
             }</textarea>
           </div>
+        </div>
+        <div class="field">
+          <label>Anexos</label>
+          <div id="c-anexos" class="anexos" style="margin:0 0 8px"></div>
+          <button type="button" class="btn btn-ghost btn-sm add-arquivo">${ico('attach_file', { size: 16 })} Adicionar arquivo</button>
+          <input type="file" id="c-arquivo" multiple style="display:none"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.txt,.csv,.png,.jpg,.jpeg,.gif,.zip" />
+          <div class="hint" style="margin-top:6px">PDF, Office, imagens ou ZIP — até 10 MB por arquivo</div>
         </div>
       </div>
 
@@ -180,6 +208,49 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
     swFixar.classList.toggle('is-on', fixar);
   });
 
+  // ------------------------------------------------------------- anexos
+  const elAnexos = el.querySelector('#c-anexos');
+  const inputArquivo = el.querySelector('#c-arquivo');
+  function pintarAnexos() {
+    elAnexos.innerHTML =
+      anexosAtuais
+        .map(
+          (x, i) => `<span class="anexo-chip">${ico('attach_file', { size: 15 })}<span class="n">${esc(x.nome)}</span>
+            <button type="button" class="rm-atual" data-i="${i}" title="Remover">${ico('close', { size: 14 })}</button></span>`,
+        )
+        .join('') +
+      novosArquivos
+        .map(
+          (f, i) => `<span class="anexo-chip novo">${ico('attach_file', { size: 15 })}<span class="n">${esc(f.name)}</span>
+            <button type="button" class="rm-novo" data-i="${i}" title="Remover">${ico('close', { size: 14 })}</button></span>`,
+        )
+        .join('');
+    elAnexos.querySelectorAll('.rm-novo').forEach((b) =>
+      b.addEventListener('click', () => {
+        novosArquivos.splice(Number(b.dataset.i), 1);
+        pintarAnexos();
+      }),
+    );
+    elAnexos.querySelectorAll('.rm-atual').forEach((b) =>
+      b.addEventListener('click', () => {
+        const x = anexosAtuais[Number(b.dataset.i)];
+        if (!confirm(`Remover o anexo "${x.nome}"?`)) return;
+        acaoAdmin(ctx, async () => {
+          await api(`/avisos/${editar.id}/anexos/${x.id}`, { method: 'DELETE' });
+          anexosAtuais.splice(Number(b.dataset.i), 1);
+          pintarAnexos();
+        });
+      }),
+    );
+  }
+  pintarAnexos();
+  el.querySelector('.add-arquivo').addEventListener('click', () => inputArquivo.click());
+  inputArquivo.addEventListener('change', () => {
+    novosArquivos.push(...inputArquivo.files);
+    inputArquivo.value = '';
+    pintarAnexos();
+  });
+
   const voltar = () => ctx.navegar(ctx.admin ? 'gerenciar-comunicados' : 'comunicados');
   el.querySelector('.ir-comunicados').addEventListener('click', voltar);
   el.querySelector('.cancelar').addEventListener('click', voltar);
@@ -194,8 +265,14 @@ export function renderNovoComunicado(el, ctx, { editar = null } = {}) {
     acaoAdmin(ctx, async () => {
       const categoria = el.querySelector('#c-categoria').value;
       const corpo = JSON.stringify({ title, body, pinned: fixar, categoria });
-      if (edicao) await api(`/avisos/${editar.id}`, { method: 'PUT', body: corpo });
-      else await api('/avisos', { method: 'POST', body: corpo });
+      const salvo = edicao
+        ? await api(`/avisos/${editar.id}`, { method: 'PUT', body: corpo })
+        : await api('/avisos', { method: 'POST', body: corpo });
+      for (const f of novosArquivos) {
+        const fd = new FormData();
+        fd.append('arquivo', f);
+        await api(`/avisos/${salvo.id}/anexos`, { method: 'POST', body: fd });
+      }
       ctx.aoMudarAvisos?.();
       voltar();
     });
