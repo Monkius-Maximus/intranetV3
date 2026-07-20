@@ -97,6 +97,24 @@ export class RepositorioJson implements Repositorio {
           ? normalizarSetores(p)
           : codigosDeCaminho(p.departmentCode ?? null, p.departmentFull ?? null);
     }
+    // Registra como setores (filtráveis) os núcleos já presentes nas pessoas mas
+    // ausentes da lista de departamentos — para um banco importado ANTES do
+    // multi-setor ganhar os núcleos só com o deploy, sem reimportar. O pai é a
+    // secretaria principal da pessoa.
+    const codigos = new Set(this.doc.departamentos.map((d) => d.code));
+    let novos = 0;
+    for (const p of this.doc.pessoas) {
+      const principal = p.departmentCode ?? null;
+      if (!principal) continue;
+      for (const s of p.setores) {
+        if (s !== principal && !codigos.has(s)) {
+          this.doc.departamentos.push({ id: this.proximoId('departamentos'), code: s, name: s, parent: principal });
+          codigos.add(s);
+          novos += 1;
+        }
+      }
+    }
+    if (novos > 0) await this.persistir();
   }
 
   private persistir(): Promise<void> {

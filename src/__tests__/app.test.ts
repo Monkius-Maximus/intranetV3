@@ -168,6 +168,51 @@ describe('Multi-setor (núcleos como setor de verdade)', () => {
     expect(emSepo.body.some((p: { name: string }) => p.name === 'Multi Lotação')).toBe(true);
     expect(emIgpe.body.some((p: { name: string }) => p.name === 'Multi Lotação')).toBe(true);
   });
+
+  it('banco legado (sem setores[]) ganha os núcleos como setor só ao ser lido', async () => {
+    const { writeFileSync } = await import('node:fs');
+    const { RepositorioJson } = await import('../data/repositorioJson');
+    const legadoDir = mkdtempSync(join(tmpdir(), 'legado-'));
+    // Doc no formato ANTIGO: caminho SECOGE/NSI, sem setores[]; só a secretaria como departamento.
+    writeFileSync(
+      join(legadoDir, 'db.json'),
+      JSON.stringify({
+        pessoas: [
+          {
+            id: 1,
+            name: 'Velho Registro',
+            departmentCode: 'SECOGE',
+            departmentFull: 'SECOGE/NSI',
+            birthDay: 1,
+            birthMonth: 1,
+            email: null,
+            phoneExtension: null,
+            cargo: null,
+            redes: {},
+            competencias: [],
+            atuacao: null,
+            status: 'ativo',
+            fonte: 'antigo',
+          },
+        ],
+        departamentos: [{ id: 1, code: 'SECOGE', name: 'SECOGE' }],
+        avisos: [],
+        grupos: [],
+        itens: [],
+        usuarios: [],
+        tiles: [],
+        eventos: [],
+        auditoria: [],
+        seq: { pessoas: 1, departamentos: 1 },
+      }),
+    );
+    const legado = new RepositorioJson(join(legadoDir, 'db.json'));
+    await legado.iniciar();
+    const p = (await legado.pessoas.todas())[0];
+    expect(p.setores).toEqual(['SECOGE', 'NSI']); // derivado do caminho ao ler
+    const nsi = (await legado.departamentos.listar()).find((d) => d.code === 'NSI');
+    expect(nsi?.parent).toBe('SECOGE'); // núcleo criado no boot, pendurado na secretaria-mãe
+  });
 });
 
 describe('Exportação do diretório em .xlsx', () => {
