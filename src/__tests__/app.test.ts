@@ -132,6 +132,69 @@ describe('Ingestão multi-origem (merge preserva enriquecimento)', () => {
   });
 });
 
+describe('Multi-setor (núcleos como setor de verdade)', () => {
+  it('importar "SECOGE/NSI" cria o núcleo NSI (mãe SECOGE) e marca a pessoa com os dois setores', async () => {
+    await mesclarPessoas(
+      repo,
+      [{ name: 'Diná do Núcleo', departmentCode: 'SECOGE', departmentFull: 'SECOGE/NSI', birthDay: 3, birthMonth: 3 }],
+      'csv',
+    );
+    const p = (await repo.pessoas.listar({ busca: 'Diná do Núcleo' }))[0];
+    expect(p.setores).toEqual(['SECOGE', 'NSI']); // principal + núcleo
+
+    const setores = (await request(app).get('/api/setores')).body as { code: string; parent?: string | null }[];
+    const nsi = setores.find((s) => s.code === 'NSI');
+    expect(nsi?.parent).toBe('SECOGE'); // núcleo pendurado na secretaria-mãe
+  });
+
+  it('filtro e busca por núcleo encontram quem pertence a ele', async () => {
+    const porFiltro = await request(app).get('/api/pessoas?setor=NSI');
+    expect(porFiltro.body.some((p: { name: string }) => p.name === 'Diná do Núcleo')).toBe(true);
+    const porBusca = await request(app).get('/api/pessoas?busca=NSI');
+    expect(porBusca.body.some((p: { name: string }) => p.name === 'Diná do Núcleo')).toBe(true);
+  });
+
+  it('admin adiciona um segundo setor pela lista `setores`; a pessoa passa a aparecer nos dois filtros', async () => {
+    const token = await loginAdmin();
+    const criada = await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Multi Lotação', departmentCode: 'SEPO', setores: ['SEPO', 'IGPE'] });
+    expect(criada.status).toBe(201);
+    expect(criada.body.setores).toEqual(['SEPO', 'IGPE']); // principal em 1º, único
+
+    const emSepo = await request(app).get('/api/pessoas?setor=SEPO');
+    const emIgpe = await request(app).get('/api/pessoas?setor=IGPE');
+    expect(emSepo.body.some((p: { name: string }) => p.name === 'Multi Lotação')).toBe(true);
+    expect(emIgpe.body.some((p: { name: string }) => p.name === 'Multi Lotação')).toBe(true);
+  });
+});
+
+describe('Exportação do diretório em .xlsx', () => {
+  it('sem token é 401 (é despejo de dados pessoais)', async () => {
+    const r = await request(app).get('/api/pessoas/export.xlsx');
+    expect(r.status).toBe(401);
+  });
+
+  it('com token devolve um .xlsx (assinatura ZIP "PK") e respeita o filtro de setor', async () => {
+    const token = await loginAdmin();
+    const r = await request(app)
+      .get('/api/pessoas/export.xlsx?setor=SEPO')
+      .set('Authorization', `Bearer ${token}`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toContain('spreadsheetml');
+    const buf = r.body as Buffer;
+    expect(buf[0]).toBe(0x50); // 'P'
+    expect(buf[1]).toBe(0x4b); // 'K'  -> arquivo .xlsx (ZIP) válido
+  });
+});
+
 describe('Avisos', () => {
   it('admin cria, edita parcialmente (PUT) e o restante é preservado', async () => {
     const token = await loginAdmin();

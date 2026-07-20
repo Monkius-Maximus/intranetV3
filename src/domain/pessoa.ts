@@ -26,8 +26,9 @@ export interface Pessoa {
 
   // núcleo
   name: string;
-  departmentCode: string | null;
+  departmentCode: string | null; // setor PRINCIPAL (dirige agrupamento/aniversariantes)
   departmentFull: string | null;
+  setores: string[]; // TODOS os setores a que pertence (o principal + núcleos/extras)
   birthDay: number | null;
   birthMonth: number | null;
 
@@ -68,6 +69,7 @@ export function pessoaVazia(): Omit<Pessoa, 'id'> {
     name: '',
     departmentCode: null,
     departmentFull: null,
+    setores: [],
     birthDay: null,
     birthMonth: null,
     email: null,
@@ -90,6 +92,35 @@ export function chaveDePessoa(p: { name: string }): string {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Deriva a lista de setores a partir do caminho completo. "SECOGE/NSI" produz
+// ['SECOGE','NSI'] — o primeiro é a secretaria (principal), os seguintes são os
+// núcleos. Retorna [] quando não há um setor principal reconhecível.
+export function codigosDeCaminho(departmentCode: string | null, departmentFull: string | null): string[] {
+  if (!departmentCode) return [];
+  const out = [departmentCode.trim().toUpperCase()];
+  if (departmentFull) {
+    const segs = departmentFull
+      .replace(/\\/g, '/')
+      .split('/')
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    for (let i = 1; i < segs.length; i++) out.push(segs[i]); // núcleos após a secretaria
+  }
+  return [...new Set(out)];
+}
+
+// Garante a invariante da lista de setores: em caixa alta, sem repetições e com
+// o setor principal (departmentCode) presente e em primeiro lugar.
+export function normalizarSetores(p: { departmentCode: string | null; setores?: string[] }): string[] {
+  const set = new Set<string>();
+  if (p.departmentCode) set.add(p.departmentCode.trim().toUpperCase());
+  for (const s of p.setores ?? []) {
+    const c = String(s).trim().toUpperCase();
+    if (c) set.add(c);
+  }
+  return [...set];
 }
 
 // ----------------------------------------------------------------- validação
@@ -115,6 +146,7 @@ const base = {
   name: z.string().trim().min(1).max(255),
   departmentCode: z.string().trim().max(50).nullable(),
   departmentFull: z.string().trim().max(255).nullable(),
+  setores: z.array(z.string().trim().min(1).max(20).transform((s) => s.toUpperCase())).max(50),
   birthDay: z.number().int().min(1).max(31).nullable(),
   birthMonth: z.number().int().min(1).max(12).nullable(),
   email: z.string().trim().max(255).nullable(),
@@ -131,6 +163,7 @@ export const criarPessoaSchema = z.object({
   name: base.name,
   departmentCode: base.departmentCode.default(null),
   departmentFull: base.departmentFull.default(null),
+  setores: base.setores.default([]),
   birthDay: base.birthDay.default(null),
   birthMonth: base.birthMonth.default(null),
   email: base.email.default(null),

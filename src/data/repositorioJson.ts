@@ -18,7 +18,14 @@ import type { Anexo, Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departamento';
 import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
-import { type DadosNovaPessoa, type PatchPessoa, type Pessoa, pessoaVazia } from '../domain/pessoa';
+import {
+  type DadosNovaPessoa,
+  type PatchPessoa,
+  type Pessoa,
+  codigosDeCaminho,
+  normalizarSetores,
+  pessoaVazia,
+} from '../domain/pessoa';
 import type { DadosNovoTile, PatchTile, Tile } from '../domain/tile';
 import type { Usuario } from '../domain/usuario';
 
@@ -82,6 +89,14 @@ export class RepositorioJson implements Repositorio {
     this.doc.eventos ??= [];
     this.doc.auditoria ??= [];
     for (const a of this.doc.avisos) a.anexos ??= [];
+    // Bancos anteriores ao multi-setor não têm pessoas[].setores: deriva do
+    // caminho (SECOGE/NSI -> ['SECOGE','NSI']); depois só normaliza.
+    for (const p of this.doc.pessoas) {
+      p.setores =
+        Array.isArray(p.setores) && p.setores.length > 0
+          ? normalizarSetores(p)
+          : codigosDeCaminho(p.departmentCode ?? null, p.departmentFull ?? null);
+    }
   }
 
   private persistir(): Promise<void> {
@@ -96,7 +111,10 @@ export class RepositorioJson implements Repositorio {
   pessoas: RepoPessoas = {
     listar: async (filtro: FiltroPessoa = {}) => {
       let itens = this.doc.pessoas;
-      if (filtro.setor) itens = itens.filter((p) => p.departmentCode === filtro.setor);
+      if (filtro.setor) {
+        const alvo = filtro.setor;
+        itens = itens.filter((p) => (p.setores ?? []).includes(alvo) || p.departmentCode === alvo);
+      }
       if (filtro.busca) {
         const q = normalizar(filtro.busca);
         itens = itens.filter(
@@ -104,6 +122,7 @@ export class RepositorioJson implements Repositorio {
             normalizar(p.name).includes(q) ||
             normalizar(p.email ?? '').includes(q) ||
             normalizar(p.departmentFull ?? '').includes(q) ||
+            (p.setores ?? []).some((c) => normalizar(c).includes(q)) ||
             (p.phoneExtension ?? '').includes(q),
         );
       }
@@ -113,6 +132,7 @@ export class RepositorioJson implements Repositorio {
     obter: async (id) => this.doc.pessoas.find((p) => p.id === id),
     criar: async (dados: DadosNovaPessoa) => {
       const p: Pessoa = { ...pessoaVazia(), ...dados, id: this.proximoId('pessoas') };
+      p.setores = normalizarSetores(p); // garante o principal na lista, sem repetição
       this.doc.pessoas.push(p);
       await this.persistir();
       return p;
@@ -121,6 +141,7 @@ export class RepositorioJson implements Repositorio {
       const p = this.doc.pessoas.find((x) => x.id === id);
       if (!p) throw new NaoEncontrado('pessoa não encontrada');
       Object.assign(p, patch);
+      p.setores = normalizarSetores(p); // reconcilia lista x setor principal após o patch
       await this.persistir();
       return p;
     },
@@ -174,14 +195,24 @@ export class RepositorioJson implements Repositorio {
         // Renomear a sigla cascateia para as pessoas: o código é a chave que
         // liga pessoa→setor; sem isto, todas ficariam órfãs do filtro.
         const antiga = d.code;
+        const nova = patch.code;
         for (const p of this.doc.pessoas) {
           if (p.departmentCode === antiga) {
-            p.departmentCode = patch.code;
-            if (p.departmentFull === antiga) p.departmentFull = patch.code;
+            p.departmentCode = nova;
+            if (p.departmentFull === antiga) p.departmentFull = nova;
             else if (p.departmentFull?.startsWith(`${antiga}/`)) {
-              p.departmentFull = patch.code + p.departmentFull.slice(antiga.length);
+              p.departmentFull = nova + p.departmentFull.slice(antiga.length);
             }
           }
+          // a sigla também vive na lista de setores (inclusive como núcleo de quem
+          // tem outro principal) — troca em todos, sem depender do departmentCode.
+          if (Array.isArray(p.setores) && p.setores.includes(antiga)) {
+            p.setores = [...new Set(p.setores.map((s) => (s === antiga ? nova : s)))];
+          }
+        }
+        // núcleos que apontavam para a sigla antiga como mãe seguem a renomeação.
+        for (const dep of this.doc.departamentos) {
+          if (dep.parent === antiga) dep.parent = nova;
         }
       }
       Object.assign(d, patch);
@@ -192,7 +223,9 @@ export class RepositorioJson implements Repositorio {
       const i = this.doc.departamentos.findIndex((x) => x.id === id);
       if (i < 0) throw new NaoEncontrado('setor não encontrado');
       const code = this.doc.departamentos[i].code;
-      const emUso = this.doc.pessoas.filter((p) => p.departmentCode === code).length;
+      const emUso = this.doc.pessoas.filter(
+        (p) => (p.setores ?? []).includes(code) || p.departmentCode === code,
+      ).length;
       if (emUso > 0) {
         throw new EmUso(`o setor ${code} tem ${emUso} pessoa(s) — mova-as antes de excluir`);
       }
