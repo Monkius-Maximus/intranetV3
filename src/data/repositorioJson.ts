@@ -198,7 +198,8 @@ export class RepositorioJson implements Repositorio {
       if (this.doc.departamentos.some((d) => d.code === dados.code)) {
         throw new JaExiste('já existe um setor com esta sigla');
       }
-      const d: Departamento = { id: this.proximoId('departamentos'), ...dados };
+      // Nome vazio/ausente => a própria sigla (siglas-only).
+      const d: Departamento = { id: this.proximoId('departamentos'), ...dados, name: dados.name?.trim() || dados.code };
       this.doc.departamentos.push(d);
       await this.persistir();
       return d;
@@ -206,6 +207,10 @@ export class RepositorioJson implements Repositorio {
     atualizar: async (id, patch: PatchSetor) => {
       const d = this.doc.departamentos.find((x) => x.id === id);
       if (!d) throw new NaoEncontrado('setor não encontrado');
+      // Nome apagado => assume a sigla (a nova, se estiver sendo renomeada).
+      if ('name' in patch && !(patch.name ?? '').trim()) {
+        patch.name = patch.code ?? d.code;
+      }
       if (patch.code && patch.code !== d.code) {
         if (this.doc.departamentos.some((x) => x.id !== id && x.code === patch.code)) {
           throw new JaExiste('já existe um setor com esta sigla');

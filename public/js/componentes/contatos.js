@@ -6,6 +6,10 @@ const PAGE_SIZE = 8;
 
 // Rótulo hierárquico de um setor: núcleos aparecem como "SECOGE / NSI".
 const rotuloSetor = (d) => (d.parent ? `${d.parent} / ${d.code}` : d.code);
+// Nome "extra" só quando acrescenta algo além da sigla (evita "SECOGE — SECOGE").
+// Espelha fielmente o campo nome — não cai na descrição (que nem é editável),
+// para quem trabalha só com siglas ver exatamente o que gravou.
+const nomeSetor = (d) => (d.name && d.name !== d.code ? d.name : '');
 // Ordena secretarias no topo, cada uma seguida dos seus núcleos.
 const ordenarSetores = (lista) =>
   [...lista].sort((a, b) => {
@@ -289,7 +293,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           <div class="lbl" style="font-size:12px;font-weight:600;color:var(--muted-2)">Novo setor</div>
           <div style="display:flex;gap:8px">
             <input name="ns-code" placeholder="SIGLA" maxlength="20" style="width:110px;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px;text-transform:uppercase" />
-            <input name="ns-name" placeholder="Nome por extenso" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px" />
+            <input name="ns-name" placeholder="Nome (opcional)" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px" />
             <button class="btn btn-primary btn-sm criar-setor">${ico('add', { size: 16 })} Criar</button>
           </div>
         </div>
@@ -317,7 +321,9 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           const n = porSetor.get(s.code) ?? 0;
           return `<div class="setor-row" data-id="${s.id}">
             <span class="badge-role setor">${esc(s.code)}</span>
-            <div class="meta"><div class="t">${esc(s.name)}${
+            <div class="meta"><div class="t">${
+              nomeSetor(s) ? esc(nomeSetor(s)) : '<span style="color:var(--faint)">só sigla</span>'
+            }${
               s.parent ? ` <span style="color:var(--faint)">· núcleo de ${esc(s.parent)}</span>` : ''
             }</div><div class="s">${n} pessoa(s)</div></div>
             <button class="row-btn ed" data-id="${s.id}" title="Editar">${ico('edit', { size: 18 })}</button>
@@ -347,16 +353,16 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           const row = lista.querySelector(`.setor-row[data-id="${s.id}"]`);
           row.innerHTML = `
             <input name="e-code" value="${escAttr(s.code)}" maxlength="20" style="width:100px;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px;text-transform:uppercase" />
-            <input name="e-name" value="${escAttr(s.name)}" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px" />
+            <input name="e-name" value="${escAttr(s.name === s.code ? '' : s.name)}" placeholder="Nome (opcional)" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px" />
             <button class="row-btn ok" title="Salvar">${ico('check', { size: 18 })}</button>
             <button class="row-btn cancel" title="Cancelar">${ico('close', { size: 18 })}</button>`;
           row.querySelector('.cancel').addEventListener('click', pintar);
           row.querySelector('.ok').addEventListener('click', () => {
             const code = row.querySelector('[name=e-code]').value.trim().toUpperCase();
             const name = row.querySelector('[name=e-name]').value.trim();
-            if (!code || !name) return;
+            if (!code) return; // nome é opcional (siglas-only); só a sigla é obrigatória
             acaoAdmin(ctx, async () => {
-              await api(`/setores/${s.id}`, { method: 'PUT', body: JSON.stringify({ code, name }) });
+              await api(`/setores/${s.id}`, { method: 'PUT', body: JSON.stringify({ code, name: name || code }) });
               mudou = true;
               await carregarTudoLocal();
               await pintar();
@@ -376,12 +382,12 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
     ov.querySelector('.criar-setor').addEventListener('click', () => {
       const code = ov.querySelector('[name=ns-code]').value.trim().toUpperCase();
       const name = ov.querySelector('[name=ns-name]').value.trim();
-      if (!code || !name) {
-        alert('Preencha a sigla e o nome.');
+      if (!code) {
+        alert('Informe a sigla.');
         return;
       }
       acaoAdmin(ctx, async () => {
-        await api('/setores', { method: 'POST', body: JSON.stringify({ code, name }) });
+        await api('/setores', { method: 'POST', body: JSON.stringify({ code, name: name || code }) });
         ov.querySelector('[name=ns-code]').value = '';
         ov.querySelector('[name=ns-name]').value = '';
         mudou = true;
@@ -420,7 +426,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
                   (d) =>
                     `<option value="${escAttr(d.code)}" ${
                       p && p.departmentCode === d.code ? 'selected' : ''
-                    }>${esc(rotuloSetor(d))} — ${esc(d.description || d.name)}</option>`,
+                    }>${esc(rotuloSetor(d))}${nomeSetor(d) ? ` — ${esc(nomeSetor(d))}` : ''}</option>`,
                 )
                 .join('')}
             </select>

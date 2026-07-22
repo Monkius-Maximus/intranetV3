@@ -413,6 +413,28 @@ describe('Setores editáveis', () => {
     expect(dup.status).toBe(409);
     expect((await request(app).post('/api/setores').send({ code: 'X2', name: 'X' })).status).toBe(401);
   });
+
+  it('cria setor só com a sigla (sem nome) — o nome assume a própria sigla', async () => {
+    const token = await loginAdmin();
+    const r = await request(app).post('/api/setores').set('Authorization', `Bearer ${token}`).send({ code: 'SOSIGLA' });
+    expect(r.status).toBe(201);
+    expect(r.body.name).toBe('SOSIGLA'); // sem nome -> vira a sigla
+  });
+
+  it('editar apagando o nome (name vazio) NÃO é no-op: o nome vira a sigla', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/setores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'COMNOME', name: 'Setor Com Nome Longo' });
+    expect(criado.body.name).toBe('Setor Com Nome Longo');
+    const editado = await request(app)
+      .put(`/api/setores/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'COMNOME', name: '' }); // apaga o nome — quer só a sigla
+    expect(editado.status).toBe(200);
+    expect(editado.body.name).toBe('COMNOME'); // caiu para a sigla, não ficou o nome antigo
+  });
 });
 
 describe('Eventos (agenda)', () => {

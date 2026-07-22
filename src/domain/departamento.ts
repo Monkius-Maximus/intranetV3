@@ -20,7 +20,9 @@ const code = z
 
 export const criarSetorSchema = z.object({
   code,
-  name: z.string().trim().min(1).max(255),
+  // Nome é OPCIONAL: quem quer trabalhar só com siglas deixa em branco e o
+  // repositório assume a própria sigla como nome.
+  name: z.string().trim().max(255).optional(),
   description: z.string().trim().max(255).default(''),
   parent: code.nullable().optional(), // núcleo dentro de uma secretaria
 });
@@ -28,7 +30,7 @@ export const criarSetorSchema = z.object({
 export const atualizarSetorSchema = z
   .object({
     code,
-    name: z.string().trim().min(1).max(255),
+    name: z.string().trim().max(255), // pode vir vazio -> vira a sigla (siglas-only)
     description: z.string().trim().max(255),
     parent: code.nullable(),
   })
