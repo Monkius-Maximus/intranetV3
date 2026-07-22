@@ -435,6 +435,40 @@ describe('Setores editáveis', () => {
     expect(editado.status).toBe(200);
     expect(editado.body.name).toBe('COMNOME'); // caiu para a sigla, não ficou o nome antigo
   });
+
+  it('mover/mesclar: manda as pessoas de um setor para outro e pode excluir a origem', async () => {
+    const token = await loginAdmin();
+    await request(app).post('/api/setores').set('Authorization', `Bearer ${token}`).send({ code: 'ORIG' });
+    await request(app).post('/api/setores').set('Authorization', `Bearer ${token}`).send({ code: 'DEST' });
+    await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Pessoa Móvel', departmentCode: 'ORIG', setores: ['ORIG'] });
+
+    const orig = (await request(app).get('/api/setores')).body.find((s: { code: string }) => s.code === 'ORIG');
+    const mov = await request(app)
+      .post(`/api/setores/${orig.id}/mover`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ destino: 'DEST', excluirOrigem: true });
+    expect(mov.status).toBe(200);
+    expect(mov.body.movidas).toBe(1);
+    expect(mov.body.excluido).toBe(true);
+
+    const emDest = (await request(app).get('/api/pessoas?setor=DEST')).body;
+    expect(emDest.some((p: { name: string }) => p.name === 'Pessoa Móvel')).toBe(true); // pessoa migrou
+    const setores = (await request(app).get('/api/setores')).body;
+    expect(setores.some((s: { code: string }) => s.code === 'ORIG')).toBe(false); // origem excluída
+  });
+
+  it('mover para o mesmo setor é 422', async () => {
+    const token = await loginAdmin();
+    const seges = (await request(app).get('/api/setores')).body.find((s: { code: string }) => s.code === 'SEGES');
+    const r = await request(app)
+      .post(`/api/setores/${seges.id}/mover`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ destino: 'SEGES' });
+    expect(r.status).toBe(422);
+  });
 });
 
 describe('Eventos (agenda)', () => {

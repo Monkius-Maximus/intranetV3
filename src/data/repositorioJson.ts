@@ -255,6 +255,31 @@ export class RepositorioJson implements Repositorio {
       this.doc.departamentos.splice(i, 1);
       await this.persistir();
     },
+    moverPessoas: async (origem, destino) => {
+      if (origem === destino) return 0;
+      if (!this.doc.departamentos.some((d) => d.code === destino)) {
+        throw new NaoEncontrado('setor de destino não encontrado');
+      }
+      let movidas = 0;
+      for (const p of this.doc.pessoas) {
+        let mexeu = false;
+        if (p.departmentCode === origem) {
+          p.departmentCode = destino;
+          if (p.departmentFull === origem) p.departmentFull = destino;
+          else if (p.departmentFull?.startsWith(`${origem}/`)) {
+            p.departmentFull = destino + p.departmentFull.slice(origem.length);
+          }
+          mexeu = true;
+        }
+        if (Array.isArray(p.setores) && p.setores.includes(origem)) {
+          p.setores = [...new Set(p.setores.map((s) => (s === origem ? destino : s)))];
+          mexeu = true;
+        }
+        if (mexeu) movidas += 1;
+      }
+      if (movidas > 0) await this.persistir();
+      return movidas;
+    },
     contar: async () => this.doc.departamentos.length,
   };
 

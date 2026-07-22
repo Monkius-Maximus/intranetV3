@@ -36,5 +36,12 @@ export const atualizarSetorSchema = z
   })
   .partial();
 
+// Mover/mesclar: reatribui as pessoas do setor para outro (e, opcionalmente,
+// exclui o setor de origem depois de esvaziá-lo).
+export const moverPessoasSchema = z.object({
+  destino: code,
+  excluirOrigem: z.boolean().default(false),
+});
+
 export type DadosNovoSetor = z.infer<typeof criarSetorSchema>;
 export type PatchSetor = z.infer<typeof atualizarSetorSchema>;

@@ -327,6 +327,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
               s.parent ? ` <span style="color:var(--faint)">· núcleo de ${esc(s.parent)}</span>` : ''
             }</div><div class="s">${n} pessoa(s)</div></div>
             <button class="row-btn ed" data-id="${s.id}" title="Editar">${ico('edit', { size: 18 })}</button>
+            <button class="row-btn mv" data-id="${s.id}" title="Mover/mesclar pessoas para outro setor">${ico('group', { size: 18 })}</button>
             <button class="row-btn danger del" data-id="${s.id}" title="${n > 0 ? 'Mova as pessoas antes de excluir' : 'Excluir'}">${ico(
               'delete',
               { size: 18 },
@@ -344,6 +345,13 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
             mudou = true;
             await pintar();
           });
+        }),
+      );
+
+      lista.querySelectorAll('.mv').forEach((b) =>
+        b.addEventListener('click', () => {
+          const s = setores.find((x) => String(x.id) === b.dataset.id);
+          if (s) abrirMover(s, setores);
         }),
       );
 
@@ -377,6 +385,56 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
       estado.todas = await api('/pessoas');
       pintarStats();
       await buscar();
+    }
+
+    // Mover/mesclar: manda todas as pessoas de um setor para outro (e opcionalmente
+    // exclui o setor de origem). Reaproveita a mesma cascata do renome, no servidor.
+    function abrirMover(origem, setoresLista) {
+      const n = estado.todas.filter((p) => setoresDe(p).includes(origem.code)).length;
+      const destinos = ordenarSetores(setoresLista.filter((s) => s.code !== origem.code));
+      const ov2 = document.createElement('div');
+      ov2.className = 'overlay center';
+      ov2.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" style="max-width:440px">
+          <div class="modal-icon">${ico('group', { size: 26 })}</div>
+          <h3>Mover pessoas de ${esc(origem.code)}</h3>
+          <p>As <strong style="color:var(--text)">${n}</strong> pessoa(s) de <strong>${esc(origem.code)}</strong> passam para o setor escolhido.</p>
+          <div class="field" style="text-align:left;margin-top:6px">
+            <label>Setor de destino</label>
+            <select name="destino" style="width:100%;border:1px solid var(--field-border);border-radius:10px;padding:9px 10px;font-size:13px">
+              ${destinos.map((d) => `<option value="${escAttr(d.code)}">${esc(rotuloSetor(d))}</option>`).join('')}
+            </select>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;text-align:left;cursor:pointer">
+            <input type="checkbox" name="excluir" /> Excluir o setor ${esc(origem.code)} depois de mover
+          </label>
+          <div class="modal-actions">
+            <button class="btn btn-ghost cancelar">Cancelar</button>
+            <button class="btn btn-primary confirmar" ${destinos.length ? '' : 'disabled'}>Mover</button>
+          </div>
+        </div>`;
+      document.body.appendChild(ov2);
+      const fechar2 = () => ov2.remove();
+      ov2.addEventListener('mousedown', (e) => {
+        if (e.target === ov2) fechar2();
+      });
+      ov2.querySelector('.cancelar').addEventListener('click', fechar2);
+      ov2.querySelector('.confirmar').addEventListener('click', () => {
+        const destino = ov2.querySelector('[name=destino]').value;
+        const excluirOrigem = ov2.querySelector('[name=excluir]').checked;
+        if (!destino) return;
+        acaoAdmin(ctx, async () => {
+          const r = await api(`/setores/${origem.id}/mover`, {
+            method: 'POST',
+            body: JSON.stringify({ destino, excluirOrigem }),
+          });
+          fechar2();
+          mudou = true;
+          await carregarTudoLocal();
+          await pintar();
+          alert(`${r.movidas} pessoa(s) movida(s) para ${destino}${r.excluido ? ` — setor ${origem.code} excluído` : ''}.`);
+        });
+      });
     }
 
     ov.querySelector('.criar-setor').addEventListener('click', () => {

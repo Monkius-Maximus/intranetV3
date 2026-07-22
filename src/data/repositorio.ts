@@ -38,6 +38,9 @@ export interface RepoDepartamentos {
   atualizar(id: number, patch: PatchSetor): Promise<Departamento>;
   // Remoção bloqueada (EmUso) enquanto houver pessoa no setor.
   remover(id: number): Promise<void>;
+  // Reatribui todas as pessoas do setor `origem` para `destino` (mesclar/mover
+  // em massa). Retorna quantas pessoas foram movidas.
+  moverPessoas(origem: string, destino: string): Promise<number>;
   contar(): Promise<number>;
 }
 
