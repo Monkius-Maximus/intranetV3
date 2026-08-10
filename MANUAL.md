@@ -514,7 +514,7 @@ Primeiro passo, sempre: `npm run doctor` e `/api/health`.
 | **Login bloqueado** ("muitas tentativas") | 5 senhas erradas seguidas | aguarde 15 min (ou reinicie o serviço, que zera o contador) |
 | Admin **esqueceu a senha** e há outro admin | — | o outro admin redefine em Contas de acesso |
 | **Único** admin esqueceu a senha | — | pare o serviço; edite `data/intranet.json` deixando `"usuarios": []`; suba com `ADMIN_EMAIL`/`ADMIN_PASSWORD` definidos (na VM: `/etc/intranet.env`) — o admin é recriado; recrie as demais contas pela tela |
-| Acentos virando `�` na importação | arquivo UTF-16/BOM do Windows | nada a fazer — o importador detecta e converte sozinho |
+| Acentos virando símbolos estranhos na importação | arquivo UTF-16/BOM do Windows | nada a fazer — o importador detecta e converte sozinho |
 
 Persistiu? Envie a saída completa do `npm run doctor` + o erro original.
 
