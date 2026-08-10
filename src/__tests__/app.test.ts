@@ -132,6 +132,114 @@ describe('Ingestão multi-origem (merge preserva enriquecimento)', () => {
   });
 });
 
+describe('Multi-setor (núcleos como setor de verdade)', () => {
+  it('importar "SECOGE/NSI" cria o núcleo NSI (mãe SECOGE) e marca a pessoa com os dois setores', async () => {
+    await mesclarPessoas(
+      repo,
+      [{ name: 'Diná do Núcleo', departmentCode: 'SECOGE', departmentFull: 'SECOGE/NSI', birthDay: 3, birthMonth: 3 }],
+      'csv',
+    );
+    const p = (await repo.pessoas.listar({ busca: 'Diná do Núcleo' }))[0];
+    expect(p.setores).toEqual(['SECOGE', 'NSI']); // principal + núcleo
+
+    const setores = (await request(app).get('/api/setores')).body as { code: string; parent?: string | null }[];
+    const nsi = setores.find((s) => s.code === 'NSI');
+    expect(nsi?.parent).toBe('SECOGE'); // núcleo pendurado na secretaria-mãe
+  });
+
+  it('filtro e busca por núcleo encontram quem pertence a ele', async () => {
+    const porFiltro = await request(app).get('/api/pessoas?setor=NSI');
+    expect(porFiltro.body.some((p: { name: string }) => p.name === 'Diná do Núcleo')).toBe(true);
+    const porBusca = await request(app).get('/api/pessoas?busca=NSI');
+    expect(porBusca.body.some((p: { name: string }) => p.name === 'Diná do Núcleo')).toBe(true);
+  });
+
+  it('admin adiciona um segundo setor pela lista `setores`; a pessoa passa a aparecer nos dois filtros', async () => {
+    const token = await loginAdmin();
+    const criada = await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Multi Lotação', departmentCode: 'SEPO', setores: ['SEPO', 'IGPE'] });
+    expect(criada.status).toBe(201);
+    expect(criada.body.setores).toEqual(['SEPO', 'IGPE']); // principal em 1º, único
+
+    const emSepo = await request(app).get('/api/pessoas?setor=SEPO');
+    const emIgpe = await request(app).get('/api/pessoas?setor=IGPE');
+    expect(emSepo.body.some((p: { name: string }) => p.name === 'Multi Lotação')).toBe(true);
+    expect(emIgpe.body.some((p: { name: string }) => p.name === 'Multi Lotação')).toBe(true);
+  });
+
+  it('banco legado (sem setores[]) ganha os núcleos como setor só ao ser lido', async () => {
+    const { writeFileSync } = await import('node:fs');
+    const { RepositorioJson } = await import('../data/repositorioJson');
+    const legadoDir = mkdtempSync(join(tmpdir(), 'legado-'));
+    // Doc no formato ANTIGO: caminho SECOGE/NSI, sem setores[]; só a secretaria como departamento.
+    writeFileSync(
+      join(legadoDir, 'db.json'),
+      JSON.stringify({
+        pessoas: [
+          {
+            id: 1,
+            name: 'Velho Registro',
+            departmentCode: 'SECOGE',
+            departmentFull: 'SECOGE/NSI',
+            birthDay: 1,
+            birthMonth: 1,
+            email: null,
+            phoneExtension: null,
+            cargo: null,
+            redes: {},
+            competencias: [],
+            atuacao: null,
+            status: 'ativo',
+            fonte: 'antigo',
+          },
+        ],
+        departamentos: [{ id: 1, code: 'SECOGE', name: 'SECOGE' }],
+        avisos: [],
+        grupos: [],
+        itens: [],
+        usuarios: [],
+        tiles: [],
+        eventos: [],
+        auditoria: [],
+        seq: { pessoas: 1, departamentos: 1 },
+      }),
+    );
+    const legado = new RepositorioJson(join(legadoDir, 'db.json'));
+    await legado.iniciar();
+    const p = (await legado.pessoas.todas())[0];
+    expect(p.setores).toEqual(['SECOGE', 'NSI']); // derivado do caminho ao ler
+    const nsi = (await legado.departamentos.listar()).find((d) => d.code === 'NSI');
+    expect(nsi?.parent).toBe('SECOGE'); // núcleo criado no boot, pendurado na secretaria-mãe
+  });
+});
+
+describe('Exportação do diretório em .xlsx', () => {
+  it('sem token é 401 (é despejo de dados pessoais)', async () => {
+    const r = await request(app).get('/api/pessoas/export.xlsx');
+    expect(r.status).toBe(401);
+  });
+
+  it('com token devolve um .xlsx (assinatura ZIP "PK") e respeita o filtro de setor', async () => {
+    const token = await loginAdmin();
+    const r = await request(app)
+      .get('/api/pessoas/export.xlsx?setor=SEPO')
+      .set('Authorization', `Bearer ${token}`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toContain('spreadsheetml');
+    const buf = r.body as Buffer;
+    expect(buf[0]).toBe(0x50); // 'P'
+    expect(buf[1]).toBe(0x4b); // 'K'  -> arquivo .xlsx (ZIP) válido
+  });
+});
+
 describe('Avisos', () => {
   it('admin cria, edita parcialmente (PUT) e o restante é preservado', async () => {
     const token = await loginAdmin();
@@ -304,6 +412,62 @@ describe('Setores editáveis', () => {
       .send({ code: 'SEPO', name: 'Duplicado' });
     expect(dup.status).toBe(409);
     expect((await request(app).post('/api/setores').send({ code: 'X2', name: 'X' })).status).toBe(401);
+  });
+
+  it('cria setor só com a sigla (sem nome) — o nome assume a própria sigla', async () => {
+    const token = await loginAdmin();
+    const r = await request(app).post('/api/setores').set('Authorization', `Bearer ${token}`).send({ code: 'SOSIGLA' });
+    expect(r.status).toBe(201);
+    expect(r.body.name).toBe('SOSIGLA'); // sem nome -> vira a sigla
+  });
+
+  it('editar apagando o nome (name vazio) NÃO é no-op: o nome vira a sigla', async () => {
+    const token = await loginAdmin();
+    const criado = await request(app)
+      .post('/api/setores')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'COMNOME', name: 'Setor Com Nome Longo' });
+    expect(criado.body.name).toBe('Setor Com Nome Longo');
+    const editado = await request(app)
+      .put(`/api/setores/${criado.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'COMNOME', name: '' }); // apaga o nome — quer só a sigla
+    expect(editado.status).toBe(200);
+    expect(editado.body.name).toBe('COMNOME'); // caiu para a sigla, não ficou o nome antigo
+  });
+
+  it('mover/mesclar: manda as pessoas de um setor para outro e pode excluir a origem', async () => {
+    const token = await loginAdmin();
+    await request(app).post('/api/setores').set('Authorization', `Bearer ${token}`).send({ code: 'ORIG' });
+    await request(app).post('/api/setores').set('Authorization', `Bearer ${token}`).send({ code: 'DEST' });
+    await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Pessoa Móvel', departmentCode: 'ORIG', setores: ['ORIG'] });
+
+    const orig = (await request(app).get('/api/setores')).body.find((s: { code: string }) => s.code === 'ORIG');
+    const mov = await request(app)
+      .post(`/api/setores/${orig.id}/mover`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ destino: 'DEST', excluirOrigem: true });
+    expect(mov.status).toBe(200);
+    expect(mov.body.movidas).toBe(1);
+    expect(mov.body.excluido).toBe(true);
+
+    const emDest = (await request(app).get('/api/pessoas?setor=DEST')).body;
+    expect(emDest.some((p: { name: string }) => p.name === 'Pessoa Móvel')).toBe(true); // pessoa migrou
+    const setores = (await request(app).get('/api/setores')).body;
+    expect(setores.some((s: { code: string }) => s.code === 'ORIG')).toBe(false); // origem excluída
+  });
+
+  it('mover para o mesmo setor é 422', async () => {
+    const token = await loginAdmin();
+    const seges = (await request(app).get('/api/setores')).body.find((s: { code: string }) => s.code === 'SEGES');
+    const r = await request(app)
+      .post(`/api/setores/${seges.id}/mover`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ destino: 'SEGES' });
+    expect(r.status).toBe(422);
   });
 });
 

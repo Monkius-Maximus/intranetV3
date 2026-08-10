@@ -36,3 +36,35 @@ export async function api(path, options = {}) {
   }
   return res.status === 204 ? null : res.json();
 }
+
+// Baixa um arquivo binário da API (ex.: exportação .xlsx) mandando o token e
+// disparando o download no navegador. Fora do api() porque a resposta é um
+// blob, não JSON.
+export async function baixar(path, nomeArquivo) {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const res = await fetch(`/api${path}`, { headers });
+  if (res.status === 401) {
+    clearToken();
+    throw new NaoAutenticado('sessão expirada');
+  }
+  if (!res.ok) {
+    const b = await res.json().catch(() => ({}));
+    throw new Error(b.erro || `erro ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = /filename="?([^"]+)"?/.exec(cd);
+  const nome = (m && m[1]) || nomeArquivo || 'download';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

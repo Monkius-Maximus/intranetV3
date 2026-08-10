@@ -1,5 +1,5 @@
 import type { Repositorio } from './data/repositorio';
-import { type Pessoa, type PessoaImportada, chaveDePessoa, pessoaVazia } from './domain/pessoa';
+import { type Pessoa, type PessoaImportada, chaveDePessoa, codigosDeCaminho, pessoaVazia } from './domain/pessoa';
 
 // Serviço de ingestão: mescla registros de QUALQUER origem no repositório,
 // preservando o ENRIQUECIMENTO (e-mail, ramal, cargo, redes…). Uma reimportação
@@ -33,16 +33,35 @@ export async function mesclarPessoas(
   let maxId = existentes.reduce((m, p) => Math.max(m, p.id), 0);
 
   const setoresDesconhecidos: Record<string, number> = {};
+  const nucleosParaCriar = new Map<string, string>(); // código do núcleo -> sigla da secretaria-mãe
   const tocados = new Set<number>();
   let novos = 0;
   let atualizados = 0;
 
+  // Une a lista atual (que pode ter setores adicionados à mão) com a derivada da
+  // importação, garantindo o principal e sem remover extras do admin.
+  const mesclarSetores = (atual: string[] | undefined, derivados: string[], principal: string | null): string[] => {
+    const set = new Set<string>();
+    if (principal) set.add(principal);
+    for (const s of atual ?? []) set.add(s);
+    for (const s of derivados) set.add(s);
+    return [...set];
+  };
+
   for (const reg of registros) {
     let code = reg.departmentCode;
     if (code && !codigosValidos.has(code)) {
+      // Só a SECRETARIA (topo) desconhecida é reportada; núcleos são criados abaixo.
       setoresDesconhecidos[code] = (setoresDesconhecidos[code] ?? 0) + 1;
       code = null; // mantém o texto do setor, zera o código não reconhecido
     }
+    // 'SECOGE/NSI' -> ['SECOGE','NSI']: o índice 0 é a secretaria; 1+ são núcleos.
+    const setoresReg = codigosDeCaminho(code, reg.departmentFull);
+    for (let i = 1; i < setoresReg.length; i++) {
+      const sub = setoresReg[i];
+      if (code && !codigosValidos.has(sub)) nucleosParaCriar.set(sub, code);
+    }
+
     const nucleo = {
       name: reg.name,
       departmentCode: code,
@@ -63,16 +82,29 @@ export async function mesclarPessoas(
     const atual = porChave.get(k);
     if (atual) {
       Object.assign(atual, nucleo, { fonte: origem }); // só núcleo; enriquecimento intacto
+      atual.setores = mesclarSetores(atual.setores, setoresReg, code);
       preencherVazios(atual);
       tocados.add(atual.id);
       atualizados += 1;
     } else {
-      const nova: Pessoa = { ...pessoaVazia(), ...nucleo, fonte: origem, id: ++maxId };
+      const nova: Pessoa = {
+        ...pessoaVazia(),
+        ...nucleo,
+        setores: mesclarSetores([], setoresReg, code),
+        fonte: origem,
+        id: ++maxId,
+      };
       preencherVazios(nova);
       porChave.set(k, nova);
       tocados.add(nova.id);
       novos += 1;
     }
+  }
+
+  // Núcleos descobertos na importação viram setores de verdade (filtráveis),
+  // pendurados na secretaria-mãe. upsert é idempotente.
+  for (const [sub, mae] of nucleosParaCriar) {
+    await repo.departamentos.upsert({ code: sub, name: sub, parent: mae });
   }
 
   const lista = [...porChave.values()];

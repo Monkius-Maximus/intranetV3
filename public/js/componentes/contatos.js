@@ -1,8 +1,23 @@
-import { api } from '../core/api.js';
+import { api, baixar } from '../core/api.js';
 import { acaoAdmin } from '../core/dom.js';
 import { avatar, esc, escAttr, ico, MESES_CURTOS } from '../core/ui.js';
 
 const PAGE_SIZE = 8;
+
+// Rótulo hierárquico de um setor: núcleos aparecem como "SECOGE / NSI".
+const rotuloSetor = (d) => (d.parent ? `${d.parent} / ${d.code}` : d.code);
+// Nome "extra" só quando acrescenta algo além da sigla (evita "SECOGE — SECOGE").
+// Espelha fielmente o campo nome — não cai na descrição (que nem é editável),
+// para quem trabalha só com siglas ver exatamente o que gravou.
+const nomeSetor = (d) => (d.name && d.name !== d.code ? d.name : '');
+// Ordena secretarias no topo, cada uma seguida dos seus núcleos.
+const ordenarSetores = (lista) =>
+  [...lista].sort((a, b) => {
+    const ca = (a.parent || a.code).localeCompare(b.parent || b.code, 'pt');
+    return ca !== 0 ? ca : (a.parent ? 1 : 0) - (b.parent ? 1 : 0) || a.code.localeCompare(b.code, 'pt');
+  });
+// Setores de uma pessoa (com retrocompatibilidade para o campo antigo).
+const setoresDe = (p) => (p.setores && p.setores.length ? p.setores : p.departmentCode ? [p.departmentCode] : []);
 
 // Console de pessoas/ramais. Serve as duas vistas do redesign:
 //   • Ramais (público, somente leitura) — todo servidor consulta o diretório.
@@ -12,6 +27,8 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   const gestao = manage && ctx.gestao;
   // gestor só mexe nas pessoas dos SEUS setores (admin em todas)
   const podeSetor = (code) => ctx.admin || Boolean(code && (ctx.usuario?.setores ?? []).includes(code));
+  // pessoa multi-setor: basta o gestor administrar UM dos setores dela
+  const podeGerirPessoa = (p) => ctx.admin || setoresDe(p).some((c) => (ctx.usuario?.setores ?? []).includes(c));
   const estado = {
     busca: ctx.buscaInicial || '',
     setor: '',
@@ -31,6 +48,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
         }</p>
       </div>
       <div style="display:flex;gap:10px">
+        ${ctx.usuario ? `<button class="btn btn-ghost exportar">${ico('download', { size: 18 })} Exportar</button>` : ''}
         ${ctx.admin ? `<button class="btn btn-ghost gerir-setores">${ico('apartment', { size: 18 })} Setores</button>` : ''}
         ${gestao ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
       </div>
@@ -48,7 +66,9 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           ${ico('filter_list', { size: 18, color: '#8a94a0' })}
           <select id="p-setor">
             <option value="">Setor: Todos</option>
-            ${ctx.setores.map((d) => `<option value="${escAttr(d.code)}">${esc(d.code)}</option>`).join('')}
+            ${ordenarSetores(ctx.setores)
+              .map((d) => `<option value="${escAttr(d.code)}">${esc(rotuloSetor(d))}</option>`)
+              .join('')}
           </select>
         </div>
         <div class="filter-pill">
@@ -70,7 +90,8 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   function pintarStats() {
     const t = estado.todas;
     const mes = new Date().getMonth() + 1;
-    const setores = new Set(t.map((p) => p.departmentCode).filter(Boolean));
+    const setores = new Set();
+    t.forEach((p) => setoresDe(p).forEach((c) => setores.add(c)));
     const aniv = t.filter((p) => p.birthMonth === mes && p.birthDay).length;
     const ativos = t.filter((p) => (p.status || 'ativo') === 'ativo').length;
     const card = (icone, cor, rot, val) =>
@@ -126,9 +147,18 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
                     p.cargo ? `<div style="font-size:12px;color:var(--muted-2)">${esc(p.cargo)}</div>` : ''
                   }</div></div></td>
                 <td>${
-                  p.departmentCode || p.departmentFull
-                    ? `<span class="badge-role setor">${esc(p.departmentCode || p.departmentFull)}</span>`
-                    : '<span style="color:var(--faint)">—</span>'
+                  setoresDe(p).length
+                    ? setoresDe(p)
+                        .map(
+                          (c, i) =>
+                            `<span class="badge-role setor" style="${
+                              i > 0 ? 'opacity:.72;margin-left:4px' : ''
+                            }">${esc(c)}</span>`,
+                        )
+                        .join('')
+                    : p.departmentFull
+                      ? `<span class="badge-role setor">${esc(p.departmentFull)}</span>`
+                      : '<span style="color:var(--faint)">—</span>'
                 }</td>
                 <td>${esc(p.phoneExtension || '—')}</td>
                 <td style="color:var(--muted)">${esc(p.email || '—')}</td>
@@ -137,7 +167,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
                 ${
                   gestao
                     ? `<td>${
-                        podeSetor(p.departmentCode)
+                        podeGerirPessoa(p)
                           ? `<div class="row-actions">
                               <button class="row-btn edit" data-id="${p.id}" title="Editar">${ico('edit', { size: 19 })}</button>
                               <button class="row-btn danger del" data-id="${p.id}" title="Excluir">${ico('delete', {
@@ -229,6 +259,20 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   });
   el.querySelector('.novo-pessoa')?.addEventListener('click', () => abrirDrawer(null));
   el.querySelector('.gerir-setores')?.addEventListener('click', () => abrirSetores());
+  el.querySelector('.exportar')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const qs = new URLSearchParams();
+    if (estado.busca) qs.set('busca', estado.busca);
+    if (estado.setor) qs.set('setor', estado.setor);
+    btn.disabled = true;
+    try {
+      await baixar(`/pessoas/export.xlsx?${qs.toString()}`, 'servidores-seplag.xlsx');
+    } catch (err) {
+      alert(`Não consegui exportar: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // ------------------------------------------------------- gestão de setores
   // Drawer com a lista (sigla, nome, nº de pessoas), edição inline, exclusão
@@ -249,7 +293,7 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           <div class="lbl" style="font-size:12px;font-weight:600;color:var(--muted-2)">Novo setor</div>
           <div style="display:flex;gap:8px">
             <input name="ns-code" placeholder="SIGLA" maxlength="20" style="width:110px;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px;text-transform:uppercase" />
-            <input name="ns-name" placeholder="Nome por extenso" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px" />
+            <input name="ns-name" placeholder="Nome (opcional)" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:9px 10px;font-size:13px" />
             <button class="btn btn-primary btn-sm criar-setor">${ico('add', { size: 16 })} Criar</button>
           </div>
         </div>
@@ -269,16 +313,21 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
       const setores = await api('/setores');
       const porSetor = new Map();
       for (const p of estado.todas) {
-        if (p.departmentCode) porSetor.set(p.departmentCode, (porSetor.get(p.departmentCode) ?? 0) + 1);
+        for (const c of setoresDe(p)) porSetor.set(c, (porSetor.get(c) ?? 0) + 1);
       }
       const lista = ov.querySelector('#setores-lista');
-      lista.innerHTML = setores
+      lista.innerHTML = ordenarSetores(setores)
         .map((s) => {
           const n = porSetor.get(s.code) ?? 0;
           return `<div class="setor-row" data-id="${s.id}">
             <span class="badge-role setor">${esc(s.code)}</span>
-            <div class="meta"><div class="t">${esc(s.name)}</div><div class="s">${n} pessoa(s)</div></div>
+            <div class="meta"><div class="t">${
+              nomeSetor(s) ? esc(nomeSetor(s)) : '<span style="color:var(--faint)">só sigla</span>'
+            }${
+              s.parent ? ` <span style="color:var(--faint)">· núcleo de ${esc(s.parent)}</span>` : ''
+            }</div><div class="s">${n} pessoa(s)</div></div>
             <button class="row-btn ed" data-id="${s.id}" title="Editar">${ico('edit', { size: 18 })}</button>
+            <button class="row-btn mv" data-id="${s.id}" title="Mover/mesclar pessoas para outro setor">${ico('group', { size: 18 })}</button>
             <button class="row-btn danger del" data-id="${s.id}" title="${n > 0 ? 'Mova as pessoas antes de excluir' : 'Excluir'}">${ico(
               'delete',
               { size: 18 },
@@ -299,22 +348,29 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
         }),
       );
 
+      lista.querySelectorAll('.mv').forEach((b) =>
+        b.addEventListener('click', () => {
+          const s = setores.find((x) => String(x.id) === b.dataset.id);
+          if (s) abrirMover(s, setores);
+        }),
+      );
+
       lista.querySelectorAll('.ed').forEach((b) =>
         b.addEventListener('click', () => {
           const s = setores.find((x) => String(x.id) === b.dataset.id);
           const row = lista.querySelector(`.setor-row[data-id="${s.id}"]`);
           row.innerHTML = `
             <input name="e-code" value="${escAttr(s.code)}" maxlength="20" style="width:100px;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px;text-transform:uppercase" />
-            <input name="e-name" value="${escAttr(s.name)}" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px" />
+            <input name="e-name" value="${escAttr(s.name === s.code ? '' : s.name)}" placeholder="Nome (opcional)" maxlength="255" style="flex:1;border:1px solid var(--field-border);border-radius:8px;padding:8px 9px;font-size:13px" />
             <button class="row-btn ok" title="Salvar">${ico('check', { size: 18 })}</button>
             <button class="row-btn cancel" title="Cancelar">${ico('close', { size: 18 })}</button>`;
           row.querySelector('.cancel').addEventListener('click', pintar);
           row.querySelector('.ok').addEventListener('click', () => {
             const code = row.querySelector('[name=e-code]').value.trim().toUpperCase();
             const name = row.querySelector('[name=e-name]').value.trim();
-            if (!code || !name) return;
+            if (!code) return; // nome é opcional (siglas-only); só a sigla é obrigatória
             acaoAdmin(ctx, async () => {
-              await api(`/setores/${s.id}`, { method: 'PUT', body: JSON.stringify({ code, name }) });
+              await api(`/setores/${s.id}`, { method: 'PUT', body: JSON.stringify({ code, name: name || code }) });
               mudou = true;
               await carregarTudoLocal();
               await pintar();
@@ -331,15 +387,65 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
       await buscar();
     }
 
+    // Mover/mesclar: manda todas as pessoas de um setor para outro (e opcionalmente
+    // exclui o setor de origem). Reaproveita a mesma cascata do renome, no servidor.
+    function abrirMover(origem, setoresLista) {
+      const n = estado.todas.filter((p) => setoresDe(p).includes(origem.code)).length;
+      const destinos = ordenarSetores(setoresLista.filter((s) => s.code !== origem.code));
+      const ov2 = document.createElement('div');
+      ov2.className = 'overlay center';
+      ov2.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" style="max-width:440px">
+          <div class="modal-icon">${ico('group', { size: 26 })}</div>
+          <h3>Mover pessoas de ${esc(origem.code)}</h3>
+          <p>As <strong style="color:var(--text)">${n}</strong> pessoa(s) de <strong>${esc(origem.code)}</strong> passam para o setor escolhido.</p>
+          <div class="field" style="text-align:left;margin-top:6px">
+            <label>Setor de destino</label>
+            <select name="destino" style="width:100%;border:1px solid var(--field-border);border-radius:10px;padding:9px 10px;font-size:13px">
+              ${destinos.map((d) => `<option value="${escAttr(d.code)}">${esc(rotuloSetor(d))}</option>`).join('')}
+            </select>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;text-align:left;cursor:pointer">
+            <input type="checkbox" name="excluir" /> Excluir o setor ${esc(origem.code)} depois de mover
+          </label>
+          <div class="modal-actions">
+            <button class="btn btn-ghost cancelar">Cancelar</button>
+            <button class="btn btn-primary confirmar" ${destinos.length ? '' : 'disabled'}>Mover</button>
+          </div>
+        </div>`;
+      document.body.appendChild(ov2);
+      const fechar2 = () => ov2.remove();
+      ov2.addEventListener('mousedown', (e) => {
+        if (e.target === ov2) fechar2();
+      });
+      ov2.querySelector('.cancelar').addEventListener('click', fechar2);
+      ov2.querySelector('.confirmar').addEventListener('click', () => {
+        const destino = ov2.querySelector('[name=destino]').value;
+        const excluirOrigem = ov2.querySelector('[name=excluir]').checked;
+        if (!destino) return;
+        acaoAdmin(ctx, async () => {
+          const r = await api(`/setores/${origem.id}/mover`, {
+            method: 'POST',
+            body: JSON.stringify({ destino, excluirOrigem }),
+          });
+          fechar2();
+          mudou = true;
+          await carregarTudoLocal();
+          await pintar();
+          alert(`${r.movidas} pessoa(s) movida(s) para ${destino}${r.excluido ? ` — setor ${origem.code} excluído` : ''}.`);
+        });
+      });
+    }
+
     ov.querySelector('.criar-setor').addEventListener('click', () => {
       const code = ov.querySelector('[name=ns-code]').value.trim().toUpperCase();
       const name = ov.querySelector('[name=ns-name]').value.trim();
-      if (!code || !name) {
-        alert('Preencha a sigla e o nome.');
+      if (!code) {
+        alert('Informe a sigla.');
         return;
       }
       acaoAdmin(ctx, async () => {
-        await api('/setores', { method: 'POST', body: JSON.stringify({ code, name }) });
+        await api('/setores', { method: 'POST', body: JSON.stringify({ code, name: name || code }) });
         ov.querySelector('[name=ns-code]').value = '';
         ov.querySelector('[name=ns-name]').value = '';
         mudou = true;
@@ -370,15 +476,29 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
             <input name="name" placeholder="Nome do servidor" value="${p ? escAttr(p.name) : ''}" /></div>
           <div class="field"><label>Cargo</label>
             <input name="cargo" placeholder="Ex.: Analista de Gestão" value="${p ? escAttr(p.cargo || '') : ''}" /></div>
-          <div class="field"><label>Setor</label>
+          <div class="field"><label>Setor principal</label>
             <select name="departmentCode">
               ${ctx.admin ? '<option value="">Sem setor</option>' : ''}
-              ${setoresDrawer
+              ${ordenarSetores(setoresDrawer)
                 .map(
                   (d) =>
                     `<option value="${escAttr(d.code)}" ${
                       p && p.departmentCode === d.code ? 'selected' : ''
-                    }>${esc(d.code)} — ${esc(d.description || d.name)}</option>`,
+                    }>${esc(rotuloSetor(d))}${nomeSetor(d) ? ` — ${esc(nomeSetor(d))}` : ''}</option>`,
+                )
+                .join('')}
+            </select>
+          </div>
+          <div class="field"><label>Outros setores
+            <span style="color:var(--faint);font-weight:400">— núcleos ou lotações adicionais (segure Ctrl/Cmd p/ marcar vários)</span></label>
+            <select name="setoresExtras" multiple size="6"
+              style="min-height:132px;padding:6px 8px;border:1px solid var(--field-border);border-radius:10px;font-size:13px">
+              ${ordenarSetores(setoresDrawer)
+                .map(
+                  (d) =>
+                    `<option value="${escAttr(d.code)}" ${
+                      p && setoresDe(p).includes(d.code) && p.departmentCode !== d.code ? 'selected' : ''
+                    }>${esc(rotuloSetor(d))}</option>`,
                 )
                 .join('')}
             </select>
@@ -444,11 +564,17 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
         return;
       }
       const code = val('departmentCode') || null;
+      const extras = [...ov.querySelectorAll('[name=setoresExtras] option:checked')].map((o) => o.value);
+      const setores = [...new Set([code, ...extras].filter(Boolean))];
+      // Mantém "SECOGE/NSI" no texto quando há exatamente um núcleo-filho do principal.
+      const filhoUnico =
+        extras.length === 1 && ctx.setores.some((d) => d.code === extras[0] && d.parent === code) ? extras[0] : null;
       const corpo = {
         name,
         cargo: val('cargo') || null,
         departmentCode: code,
-        departmentFull: code,
+        departmentFull: filhoUnico ? `${code}/${filhoUnico}` : code,
+        setores,
         email: val('email') || null,
         phoneExtension: val('phoneExtension') || null,
         birthDay: num('birthDay'),

@@ -81,3 +81,12 @@ export function gerenciaSetor(user: TokenPayload | undefined, code: string | nul
   if (user?.role !== 'gestor') return false;
   return code !== null && (user.setores ?? []).includes(code);
 }
+
+// Escopo do gestor quando a pessoa tem VÁRIOS setores: basta administrar um
+// deles (admins passam sempre). Usado no diretório multi-setor.
+export function gerenciaAlgumSetor(user: TokenPayload | undefined, setores: (string | null | undefined)[]): boolean {
+  if (user?.role === 'admin') return true;
+  if (user?.role !== 'gestor') return false;
+  const meus = new Set(user.setores ?? []);
+  return setores.some((s) => s != null && meus.has(s));
+}

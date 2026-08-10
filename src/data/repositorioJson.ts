@@ -18,7 +18,14 @@ import type { Anexo, Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
 import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departamento';
 import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
-import { type DadosNovaPessoa, type PatchPessoa, type Pessoa, pessoaVazia } from '../domain/pessoa';
+import {
+  type DadosNovaPessoa,
+  type PatchPessoa,
+  type Pessoa,
+  codigosDeCaminho,
+  normalizarSetores,
+  pessoaVazia,
+} from '../domain/pessoa';
 import type { DadosNovoTile, PatchTile, Tile } from '../domain/tile';
 import type { Usuario } from '../domain/usuario';
 
@@ -82,6 +89,32 @@ export class RepositorioJson implements Repositorio {
     this.doc.eventos ??= [];
     this.doc.auditoria ??= [];
     for (const a of this.doc.avisos) a.anexos ??= [];
+    // Bancos anteriores ao multi-setor não têm pessoas[].setores: deriva do
+    // caminho (SECOGE/NSI -> ['SECOGE','NSI']); depois só normaliza.
+    for (const p of this.doc.pessoas) {
+      p.setores =
+        Array.isArray(p.setores) && p.setores.length > 0
+          ? normalizarSetores(p)
+          : codigosDeCaminho(p.departmentCode ?? null, p.departmentFull ?? null);
+    }
+    // Registra como setores (filtráveis) os núcleos já presentes nas pessoas mas
+    // ausentes da lista de departamentos — para um banco importado ANTES do
+    // multi-setor ganhar os núcleos só com o deploy, sem reimportar. O pai é a
+    // secretaria principal da pessoa.
+    const codigos = new Set(this.doc.departamentos.map((d) => d.code));
+    let novos = 0;
+    for (const p of this.doc.pessoas) {
+      const principal = p.departmentCode ?? null;
+      if (!principal) continue;
+      for (const s of p.setores) {
+        if (s !== principal && !codigos.has(s)) {
+          this.doc.departamentos.push({ id: this.proximoId('departamentos'), code: s, name: s, parent: principal });
+          codigos.add(s);
+          novos += 1;
+        }
+      }
+    }
+    if (novos > 0) await this.persistir();
   }
 
   private persistir(): Promise<void> {
@@ -96,7 +129,10 @@ export class RepositorioJson implements Repositorio {
   pessoas: RepoPessoas = {
     listar: async (filtro: FiltroPessoa = {}) => {
       let itens = this.doc.pessoas;
-      if (filtro.setor) itens = itens.filter((p) => p.departmentCode === filtro.setor);
+      if (filtro.setor) {
+        const alvo = filtro.setor;
+        itens = itens.filter((p) => (p.setores ?? []).includes(alvo) || p.departmentCode === alvo);
+      }
       if (filtro.busca) {
         const q = normalizar(filtro.busca);
         itens = itens.filter(
@@ -104,6 +140,7 @@ export class RepositorioJson implements Repositorio {
             normalizar(p.name).includes(q) ||
             normalizar(p.email ?? '').includes(q) ||
             normalizar(p.departmentFull ?? '').includes(q) ||
+            (p.setores ?? []).some((c) => normalizar(c).includes(q)) ||
             (p.phoneExtension ?? '').includes(q),
         );
       }
@@ -113,6 +150,7 @@ export class RepositorioJson implements Repositorio {
     obter: async (id) => this.doc.pessoas.find((p) => p.id === id),
     criar: async (dados: DadosNovaPessoa) => {
       const p: Pessoa = { ...pessoaVazia(), ...dados, id: this.proximoId('pessoas') };
+      p.setores = normalizarSetores(p); // garante o principal na lista, sem repetição
       this.doc.pessoas.push(p);
       await this.persistir();
       return p;
@@ -121,6 +159,7 @@ export class RepositorioJson implements Repositorio {
       const p = this.doc.pessoas.find((x) => x.id === id);
       if (!p) throw new NaoEncontrado('pessoa não encontrada');
       Object.assign(p, patch);
+      p.setores = normalizarSetores(p); // reconcilia lista x setor principal após o patch
       await this.persistir();
       return p;
     },
@@ -159,7 +198,8 @@ export class RepositorioJson implements Repositorio {
       if (this.doc.departamentos.some((d) => d.code === dados.code)) {
         throw new JaExiste('já existe um setor com esta sigla');
       }
-      const d: Departamento = { id: this.proximoId('departamentos'), ...dados };
+      // Nome vazio/ausente => a própria sigla (siglas-only).
+      const d: Departamento = { id: this.proximoId('departamentos'), ...dados, name: dados.name?.trim() || dados.code };
       this.doc.departamentos.push(d);
       await this.persistir();
       return d;
@@ -167,6 +207,10 @@ export class RepositorioJson implements Repositorio {
     atualizar: async (id, patch: PatchSetor) => {
       const d = this.doc.departamentos.find((x) => x.id === id);
       if (!d) throw new NaoEncontrado('setor não encontrado');
+      // Nome apagado => assume a sigla (a nova, se estiver sendo renomeada).
+      if ('name' in patch && !(patch.name ?? '').trim()) {
+        patch.name = patch.code ?? d.code;
+      }
       if (patch.code && patch.code !== d.code) {
         if (this.doc.departamentos.some((x) => x.id !== id && x.code === patch.code)) {
           throw new JaExiste('já existe um setor com esta sigla');
@@ -174,14 +218,24 @@ export class RepositorioJson implements Repositorio {
         // Renomear a sigla cascateia para as pessoas: o código é a chave que
         // liga pessoa→setor; sem isto, todas ficariam órfãs do filtro.
         const antiga = d.code;
+        const nova = patch.code;
         for (const p of this.doc.pessoas) {
           if (p.departmentCode === antiga) {
-            p.departmentCode = patch.code;
-            if (p.departmentFull === antiga) p.departmentFull = patch.code;
+            p.departmentCode = nova;
+            if (p.departmentFull === antiga) p.departmentFull = nova;
             else if (p.departmentFull?.startsWith(`${antiga}/`)) {
-              p.departmentFull = patch.code + p.departmentFull.slice(antiga.length);
+              p.departmentFull = nova + p.departmentFull.slice(antiga.length);
             }
           }
+          // a sigla também vive na lista de setores (inclusive como núcleo de quem
+          // tem outro principal) — troca em todos, sem depender do departmentCode.
+          if (Array.isArray(p.setores) && p.setores.includes(antiga)) {
+            p.setores = [...new Set(p.setores.map((s) => (s === antiga ? nova : s)))];
+          }
+        }
+        // núcleos que apontavam para a sigla antiga como mãe seguem a renomeação.
+        for (const dep of this.doc.departamentos) {
+          if (dep.parent === antiga) dep.parent = nova;
         }
       }
       Object.assign(d, patch);
@@ -192,12 +246,39 @@ export class RepositorioJson implements Repositorio {
       const i = this.doc.departamentos.findIndex((x) => x.id === id);
       if (i < 0) throw new NaoEncontrado('setor não encontrado');
       const code = this.doc.departamentos[i].code;
-      const emUso = this.doc.pessoas.filter((p) => p.departmentCode === code).length;
+      const emUso = this.doc.pessoas.filter(
+        (p) => (p.setores ?? []).includes(code) || p.departmentCode === code,
+      ).length;
       if (emUso > 0) {
         throw new EmUso(`o setor ${code} tem ${emUso} pessoa(s) — mova-as antes de excluir`);
       }
       this.doc.departamentos.splice(i, 1);
       await this.persistir();
+    },
+    moverPessoas: async (origem, destino) => {
+      if (origem === destino) return 0;
+      if (!this.doc.departamentos.some((d) => d.code === destino)) {
+        throw new NaoEncontrado('setor de destino não encontrado');
+      }
+      let movidas = 0;
+      for (const p of this.doc.pessoas) {
+        let mexeu = false;
+        if (p.departmentCode === origem) {
+          p.departmentCode = destino;
+          if (p.departmentFull === origem) p.departmentFull = destino;
+          else if (p.departmentFull?.startsWith(`${origem}/`)) {
+            p.departmentFull = destino + p.departmentFull.slice(origem.length);
+          }
+          mexeu = true;
+        }
+        if (Array.isArray(p.setores) && p.setores.includes(origem)) {
+          p.setores = [...new Set(p.setores.map((s) => (s === origem ? destino : s)))];
+          mexeu = true;
+        }
+        if (mexeu) movidas += 1;
+      }
+      if (movidas > 0) await this.persistir();
+      return movidas;
     },
     contar: async () => this.doc.departamentos.length,
   };

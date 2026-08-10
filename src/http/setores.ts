@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { autenticar, exigirAdmin } from '../auth';
 import type { Repositorio } from '../data/repositorio';
-import { atualizarSetorSchema, criarSetorSchema } from '../domain/departamento';
+import { atualizarSetorSchema, criarSetorSchema, moverPessoasSchema } from '../domain/departamento';
 import { auditar, idParam, validar } from './util';
 
 // Setores/departamentos — leitura pública (filtros e formulários); gestão só
@@ -34,6 +34,37 @@ export function montarSetores(repo: Repositorio): Router {
     await repo.departamentos.remover(id);
     await auditar(repo, req, 'excluiu', 'setor', `id ${id}`);
     res.json({ ok: true });
+  });
+
+  // Move/mescla: manda todas as pessoas deste setor para outro; opcionalmente
+  // exclui o setor de origem (já esvaziado) no fim.
+  r.post('/:id/mover', autenticar, exigirAdmin, validar(moverPessoasSchema), async (req, res) => {
+    const id = idParam(req, res);
+    if (id === null) return;
+    const origem = await repo.departamentos.listar().then((ds) => ds.find((d) => d.id === id));
+    if (!origem) {
+      res.status(404).json({ erro: 'setor de origem não encontrado' });
+      return;
+    }
+    const { destino, excluirOrigem } = req.body as { destino: string; excluirOrigem: boolean };
+    if (destino === origem.code) {
+      res.status(422).json({ erro: 'o destino deve ser diferente da origem' });
+      return;
+    }
+    const movidas = await repo.departamentos.moverPessoas(origem.code, destino);
+    let excluido = false;
+    if (excluirOrigem) {
+      await repo.departamentos.remover(id); // já está vazio -> não bloqueia
+      excluido = true;
+    }
+    await auditar(
+      repo,
+      req,
+      excluido ? 'mesclou' : 'moveu pessoas de',
+      'setor',
+      `${origem.code} -> ${destino} (${movidas})`,
+    );
+    res.json({ movidas, destino, excluido });
   });
 
   return r;

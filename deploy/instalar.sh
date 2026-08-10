@@ -150,7 +150,11 @@ EOF
 
 if [ "$TEM_SYSTEMD" -eq 1 ]; then
   systemctl daemon-reload
-  systemctl enable --now intranet
+  systemctl enable intranet
+  # restart (não "enable --now"): numa ATUALIZAÇÃO o serviço já está rodando e
+  # "start" seria no-op, deixando o código antigo em memória. restart derruba e
+  # sobe carregando o novo /opt/intranet; se estiver parado, apenas inicia.
+  systemctl restart intranet
   sleep 2
   systemctl --no-pager --lines=6 status intranet || true
 else
