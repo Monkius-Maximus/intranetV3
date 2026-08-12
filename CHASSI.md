@@ -1,0 +1,56 @@
+# ⚠️ Branch de laboratório — NÃO é a intranet de produção
+
+Este branch (`claude/chassi-generico`) existe para transformar o projeto num
+**chassi reutilizável** — uma base para outras intranets (residencial, de
+equipe, de outro órgão). Ele **não** deve ir para a intranet que está no ar.
+
+## Quem é quem
+
+| Branch | Papel | Vai para o servidor? |
+|---|---|---|
+| `claude/redesign-ui-intranet` | **Produção** — a intranet da SEPLAG | **Sim** |
+| `claude/multi-setor-export` | PR #2, entra em produção | **Sim**, ao ser mergeado |
+| `claude/chassi-generico` | **Laboratório** (este) | **Não** |
+
+Este branch **parte** do PR #2 (para herdar a correção do instalador), então o
+histórico dele contém aquele trabalho. Isso é intencional — mas significa que
+**abrir um PR daqui para produção levaria as duas coisas juntas**. Não faça
+isso: se algum dia uma parte daqui for aproveitada em produção, ela deve sair
+num commit próprio, num branch próprio, com decisão explícita.
+
+## O que já foi feito aqui
+
+1. **`src/perfil.ts`** — arquivo único com a identidade (nome, organização,
+   marca, logo) e o conteúdo inicial (setores, navegação, tiles). O `seed.ts`
+   ficou genérico; a interface lê a identidade de `GET /api/perfil` e monta a
+   barra lateral, o título da aba, o login e o favicon a partir dela.
+2. **`deploy/instalar.sh` parametrizado** por `PROJETO` (padrão `intranet`).
+   Com o padrão, os caminhos são idênticos aos de hoje.
+
+## Como testar sem encostar na produção
+
+Rode sempre com **pasta de dados**, **porta** e **projeto** próprios:
+
+```bash
+# desenvolvimento local (nunca usa o data/ de produção)
+INTRANET_DATA=/tmp/lab-casa PORT=3300 \
+  ADMIN_EMAIL=admin@casa.local ADMIN_PASSWORD='umaSenhaForte' npm start
+```
+
+Se um dia for instalar numa VM **para testar**, use outro nome de projeto e
+outra porta — assim convive com a instalação real sem tocá-la:
+
+```bash
+sudo PROJETO=casa PORTA=8080 bash deploy/instalar.sh
+```
+
+> Isso cria `/opt/casa`, usuário `casa`, serviço `casa` e `/etc/casa.env` —
+> nada em comum com `/opt/intranet`. **Nunca** rode o instalador deste branch
+> com o `PROJETO` padrão numa máquina que já hospeda a intranet real: os
+> caminhos coincidiriam e o código do laboratório substituiria o de produção.
+
+## Próximos passos planejados
+
+3. **Recursos dirigidos por dados** — criar "Estoque", "Gastos", "Tarefas" pela
+   própria tela, sem programar (o "CRUD de página").
+4. **Perfil "Casa"** — a intranet residencial funcionando sobre o chassi.
