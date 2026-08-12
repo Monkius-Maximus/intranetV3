@@ -80,4 +80,38 @@ export function dataAviso(iso) {
   return `${d.getDate()} ${MESES_CURTOS[d.getMonth()]}`;
 }
 
+// Marca do projeto: a imagem do perfil quando há logo, senão as iniciais.
+// Usada na barra lateral e no login — os dois vêm de src/perfil.ts.
+export function marcaHtml(perfil, cls = 'brand-mark') {
+  if (perfil?.logo) {
+    return `<img class="${escAttr(cls)}" src="${escAttr(perfil.logo)}" alt="${escAttr(
+      perfil.titulo || perfil.nome || '',
+    )}" style="object-fit:contain" />`;
+  }
+  return `<div class="${escAttr(cls)}">${esc(perfil?.marca || '·')}</div>`;
+}
+
+// Favicon desenhado a partir da marca — trocar o perfil troca o ícone da aba,
+// sem precisar editar um arquivo .svg à parte. Se o perfil tiver logo, usa a
+// própria imagem.
+export function aplicarFavicon(perfil) {
+  const link = document.querySelector('link[rel="icon"]') || document.createElement('link');
+  link.rel = 'icon';
+  if (perfil?.logo) {
+    link.href = perfil.logo;
+  } else {
+    const cor = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() || '#0b5cd6';
+    const texto = (perfil?.marca || '·').slice(0, 3);
+    const tamanho = texto.length > 2 ? 22 : 28;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+      `<rect width="64" height="64" rx="16" fill="${cor}"/>` +
+      `<text x="32" y="43" text-anchor="middle" font-family="system-ui,sans-serif" ` +
+      `font-size="${tamanho}" font-weight="700" fill="#fff">${esc(texto)}</text></svg>`;
+    link.type = 'image/svg+xml';
+    link.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+  if (!link.parentNode) document.head.appendChild(link);
+}
+
 export { esc, escAttr };

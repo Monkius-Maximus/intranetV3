@@ -1,5 +1,5 @@
 import { api, clearToken, getToken, setToken } from './core/api.js';
-import { avatar, esc, ico } from './core/ui.js';
+import { aplicarFavicon, avatar, esc, ico, marcaHtml } from './core/ui.js';
 import { renderSidebar } from './componentes/sidebar.js';
 import { renderDashboard } from './componentes/dashboard.js';
 import { renderComunicados, renderNovoComunicado } from './componentes/avisos.js';
@@ -10,11 +10,16 @@ import { renderAuditoria } from './componentes/auditoria.js';
 
 const appEl = document.querySelector('#app');
 
+// Identidade vem do servidor (src/perfil.ts). Os valores abaixo são só o
+// fallback se a chamada falhar — a tela nunca fica sem marca.
+const PERFIL_PADRAO = { nome: 'Intranet', organizacao: '', marca: 'IN', logo: null, titulo: 'Intranet' };
+
 const state = {
   usuario: null,
   view: 'inicio',
   params: {},
   setores: [],
+  perfil: PERFIL_PADRAO,
 };
 
 const isAdmin = () => state.usuario?.role === 'admin';
@@ -32,6 +37,7 @@ function montarCtx() {
     usuario: state.usuario,
     view: state.view,
     setores: state.setores,
+    perfil: state.perfil,
     buscaInicial: state.params.busca || '',
     navegar,
     sair,
@@ -142,8 +148,8 @@ function renderLogin(msg = '') {
     <div class="login-wrap">
       <div class="login-card">
         <div class="login-brand">
-          <div class="brand-mark">SP</div>
-          <div><h1>Intranet SEPLAG</h1><p class="subtitle">Entrar como administrador</p></div>
+          ${marcaHtml(state.perfil, 'brand-mark')}
+          <div><h1>${esc(state.perfil.titulo)}</h1><p class="subtitle">Entrar como administrador</p></div>
         </div>
         <form class="login-form" id="f-login">
           <div><label>E-mail</label>
@@ -198,6 +204,15 @@ function exigirTrocaSePendente() {
 
 // ------------------------------------------------------------------- boot
 async function boot() {
+  // Identidade primeiro: título, favicon e marca saem daqui (src/perfil.ts).
+  try {
+    state.perfil = { ...PERFIL_PADRAO, ...(await api('/perfil')) };
+  } catch {
+    state.perfil = PERFIL_PADRAO;
+  }
+  document.title = state.perfil.titulo;
+  aplicarFavicon(state.perfil);
+
   if (getToken()) {
     try {
       state.usuario = await api('/auth/me');

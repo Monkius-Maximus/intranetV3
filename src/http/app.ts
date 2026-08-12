@@ -11,6 +11,7 @@ import { montarEventos } from './eventos';
 import { montarTiles } from './tiles';
 import { montarHealth } from './health';
 import { montarNavegacao } from './navegacao';
+import { montarPerfil } from './perfil';
 import { montarPessoas } from './pessoas';
 import { montarSetores } from './setores';
 
@@ -25,6 +26,7 @@ export function criarApp(repo: Repositorio): express.Express {
   app.use(express.static(publicDir));
 
   app.use('/api/health', montarHealth(repo));
+  app.use('/api/perfil', montarPerfil());
   app.use('/api/auth', montarAuth(repo));
   app.use('/api/contas', montarContas(repo));
   app.use('/api/pessoas', montarPessoas(repo));

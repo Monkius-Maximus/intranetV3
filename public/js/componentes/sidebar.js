@@ -1,4 +1,4 @@
-import { avatar, esc, ico } from '../core/ui.js';
+import { avatar, esc, ico, marcaHtml } from '../core/ui.js';
 
 // Barra lateral de navegação (substitui a antiga barra de menus do topo).
 // A navegação entre sistemas externos foi para os tiles/Links úteis; a sidebar
@@ -35,8 +35,10 @@ export function renderSidebar(el, ctx) {
 
   el.innerHTML = `
     <div class="sidebar-brand">
-      <div class="brand-mark">SP</div>
-      <div><div class="brand-name">Intranet</div><div class="brand-sub">SEPLAG</div></div>
+      ${marcaHtml(ctx.perfil)}
+      <div><div class="brand-name">${esc(ctx.perfil?.nome || '')}</div><div class="brand-sub">${esc(
+        ctx.perfil?.organizacao || '',
+      )}</div></div>
     </div>
     <nav class="sidebar-nav">
       ${ITENS.map(item).join('')}

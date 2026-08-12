@@ -41,6 +41,33 @@ describe('Saúde e acesso', () => {
     expect(r.body.status).toBe('ok');
   });
 
+  it('perfil é público e traz a identidade que a tela desenha', async () => {
+    const r = await request(app).get('/api/perfil');
+    expect(r.status).toBe(200);
+    // O chassi não presume o assunto: exige a FORMA, não os valores do SEPLAG.
+    expect(typeof r.body.nome).toBe('string');
+    expect(r.body.nome.length).toBeGreaterThan(0);
+    expect(typeof r.body.marca).toBe('string');
+    expect(r.body).toHaveProperty('organizacao');
+    expect(r.body).toHaveProperty('logo');
+    // título = nome + organização (derivado, não repetido no perfil)
+    const { perfil, tituloDoPerfil } = await import('../perfil');
+    expect(r.body.titulo).toBe(tituloDoPerfil(perfil));
+    // identidade não vaza o conteúdo de seed
+    expect(r.body).not.toHaveProperty('departamentos');
+    expect(r.body).not.toHaveProperty('tiles');
+  });
+
+  it('o seed aplicou o conteúdo do perfil (não valores fixos no código)', async () => {
+    const { perfil } = await import('../perfil');
+    const setores = (await request(app).get('/api/setores')).body as { code: string }[];
+    for (const d of perfil.departamentos) {
+      expect(setores.some((s) => s.code === d.code)).toBe(true);
+    }
+    const tiles = (await request(app).get('/api/tiles')).body as { label: string }[];
+    expect(tiles.length).toBe(perfil.tiles.length);
+  });
+
   it('leitura do diretório é pública (200 sem token)', async () => {
     const r = await request(app).get('/api/pessoas');
     expect(r.status).toBe(200);
