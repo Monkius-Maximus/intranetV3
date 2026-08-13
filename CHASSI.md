@@ -36,13 +36,23 @@ num commit próprio, num branch próprio, com decisão explícita.
    - Leitura pública, escrita para admin/gestor, tudo na trilha de auditoria.
    - Excluir a página remove os registros dela (a tela avisa antes).
 
+## Perfis prontos
+
+| `PERFIL` | O que é | Nasce com |
+|---|---|---|
+| `seplag` (padrão) | A intranet da SEPLAG | 9 secretarias, tiles e links do órgão |
+| `casa` | Intranet residencial | Áreas da casa + páginas **Estoque**, **Gastos** e **Tarefas** |
+
+Criar um projeto novo = escrever um arquivo em `src/perfis/` e listá-lo em
+`src/perfil.ts`. Nada mais no código conhece o assunto.
+
 ## Como testar sem encostar na produção
 
 Rode sempre com **pasta de dados**, **porta** e **projeto** próprios:
 
 ```bash
-# desenvolvimento local (nunca usa o data/ de produção)
-INTRANET_DATA=/tmp/lab-casa PORT=3300 \
+# a intranet residencial, isolada (nunca usa o data/ de produção)
+PERFIL=casa INTRANET_DATA=/tmp/lab-casa PORT=3300 \
   ADMIN_EMAIL=admin@casa.local ADMIN_PASSWORD='umaSenhaForte' npm start
 ```
 
@@ -58,9 +68,13 @@ sudo PROJETO=casa PORTA=8080 bash deploy/instalar.sh
 > com o `PROJETO` padrão numa máquina que já hospeda a intranet real: os
 > caminhos coincidiriam e o código do laboratório substituiria o de produção.
 
+4. **Perfil "Casa"** — feito: `PERFIL=casa` sobe a intranet residencial com
+   Estoque, Gastos e Tarefas já criados.
+
 ## Próximos passos planejados
 
-4. **Perfil "Casa"** — a intranet residencial já montada: perfil com Estoque,
-   Lançamentos e Tarefas criados de saída, para o sistema nascer pronto.
-5. **Generalizar o escopo do gestor** — hoje é literalmente "setores"; virar
+5. **Filtros por coluna nas páginas** — a tela genérica só tem busca livre.
+   Para "o que está abaixo do mínimo?" ou "gastos deste mês" falta filtrar e
+   somar por campo.
+6. **Generalizar o escopo do gestor** — hoje é literalmente "setores"; virar
    "escopo por campo" para servir a outros assuntos.

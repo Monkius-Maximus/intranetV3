@@ -43,8 +43,9 @@ const url = z
   .trim()
   .min(1)
   .max(500)
-  .refine((v) => /^https?:\/\/.+/.test(v) || /^#[a-z-]+$/.test(v), {
-    message: 'use https://… (sistema externo) ou #view (interno, ex.: #ramais)',
+  // Interno: #ramais, #aniversariantes ou #r:<chave> (páginas criadas pela tela).
+  .refine((v) => /^https?:\/\/.+/.test(v) || /^#[a-z][a-z0-9_:-]*$/.test(v), {
+    message: 'use https://… (sistema externo) ou #view (interno, ex.: #ramais, #r:estoque)',
   });
 
 export const criarTileSchema = z.object({

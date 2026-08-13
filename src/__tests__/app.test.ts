@@ -58,6 +58,31 @@ describe('Saúde e acesso', () => {
     expect(r.body).not.toHaveProperty('tiles');
   });
 
+  it('todo perfil disponível é válido (identidade preenchida e páginas no schema)', async () => {
+    const { PERFIS, tituloDoPerfil } = await import('../perfil');
+    const { criarRecursoSchema } = await import('../domain/recurso');
+    const nomes = Object.keys(PERFIS);
+    expect(nomes).toContain('seplag');
+    expect(nomes).toContain('casa');
+
+    for (const [chave, p] of Object.entries(PERFIS)) {
+      expect(p.nome, `${chave}.nome`).toBeTruthy();
+      expect(p.marca, `${chave}.marca`).toBeTruthy();
+      expect(tituloDoPerfil(p)).toContain(p.nome);
+      expect(p.departamentos.length, `${chave}.departamentos`).toBeGreaterThan(0);
+      // as páginas do perfil precisam passar no MESMO schema que a tela usa
+      for (const r of p.recursos ?? []) {
+        expect(() => criarRecursoSchema.parse(r), `${chave}: recurso ${r.chave}`).not.toThrow();
+      }
+    }
+  });
+
+  it('o perfil "casa" traz as páginas da intranet residencial', async () => {
+    const { PERFIS } = await import('../perfil');
+    const chaves = (PERFIS.casa.recursos ?? []).map((r) => r.chave);
+    expect(chaves).toEqual(['estoque', 'lancamentos', 'tarefas']);
+  });
+
   it('o seed aplicou o conteúdo do perfil (não valores fixos no código)', async () => {
     const { perfil } = await import('../perfil');
     const setores = (await request(app).get('/api/setores')).body as { code: string }[];
