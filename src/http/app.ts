@@ -13,6 +13,8 @@ import { montarHealth } from './health';
 import { montarNavegacao } from './navegacao';
 import { montarPerfil } from './perfil';
 import { montarPessoas } from './pessoas';
+import { montarRecursos } from './recursos';
+import { montarRegistros } from './registros';
 import { montarSetores } from './setores';
 
 // Monta o app Express a partir de um repositório. Receber o repo por parâmetro
@@ -35,6 +37,11 @@ export function criarApp(repo: Repositorio): express.Express {
   app.use('/api/navegacao', montarNavegacao(repo));
   app.use('/api/tiles', montarTiles(repo));
   app.use('/api/eventos', montarEventos(repo));
+  // Recursos dirigidos por dados: a definição em /api/recursos e o conteúdo em
+  // /api/r/<chave> — prefixo curto e separado para nunca colidir com as rotas
+  // escritas à mão acima.
+  app.use('/api/recursos', montarRecursos(repo));
+  app.use('/api/r', montarRegistros(repo));
   app.use('/api/auditoria', montarAuditoria(repo));
 
   app.use((_req, res) => {

@@ -26,6 +26,15 @@ num commit próprio, num branch próprio, com decisão explícita.
    barra lateral, o título da aba, o login e o favicon a partir dela.
 2. **`deploy/instalar.sh` parametrizado** por `PROJETO` (padrão `intranet`).
    Com o padrão, os caminhos são idênticos aos de hoje.
+3. **Recursos dirigidos por dados — o "CRUD de página".** O admin cria uma
+   página nova (Estoque, Gastos, Tarefas) pela tela **Páginas**, escolhendo os
+   campos; ela aparece no menu e na API sem ninguém programar nem reinstalar.
+   - Definição em `src/domain/recurso.ts`; conteúdo em `/api/r/<chave>`.
+   - Cinco tipos de campo: texto, número, data, sim/não e seleção.
+   - **A validação é gerada da definição** — obrigatório, opção inválida e
+     campo desconhecido são recusados com 422, como nas telas escritas à mão.
+   - Leitura pública, escrita para admin/gestor, tudo na trilha de auditoria.
+   - Excluir a página remove os registros dela (a tela avisa antes).
 
 ## Como testar sem encostar na produção
 
@@ -51,6 +60,7 @@ sudo PROJETO=casa PORTA=8080 bash deploy/instalar.sh
 
 ## Próximos passos planejados
 
-3. **Recursos dirigidos por dados** — criar "Estoque", "Gastos", "Tarefas" pela
-   própria tela, sem programar (o "CRUD de página").
-4. **Perfil "Casa"** — a intranet residencial funcionando sobre o chassi.
+4. **Perfil "Casa"** — a intranet residencial já montada: perfil com Estoque,
+   Lançamentos e Tarefas criados de saída, para o sistema nascer pronto.
+5. **Generalizar o escopo do gestor** — hoje é literalmente "setores"; virar
+   "escopo por campo" para servir a outros assuntos.

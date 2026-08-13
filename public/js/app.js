@@ -7,6 +7,8 @@ import { renderPessoas } from './componentes/contatos.js';
 import { renderAniversariantesPagina } from './componentes/aniversariantes.js';
 import { abrirTrocaDeSenha, renderContas } from './componentes/contas.js';
 import { renderAuditoria } from './componentes/auditoria.js';
+import { renderRecurso } from './componentes/recurso.js';
+import { renderPaginas } from './componentes/paginas.js';
 
 const appEl = document.querySelector('#app');
 
@@ -20,6 +22,7 @@ const state = {
   params: {},
   setores: [],
   perfil: PERFIL_PADRAO,
+  recursos: [], // páginas criadas pela tela (recursos dirigidos por dados)
 };
 
 const isAdmin = () => state.usuario?.role === 'admin';
@@ -27,7 +30,7 @@ const isGestor = () => state.usuario?.role === 'gestor';
 
 // Views restritas por papel; pedidas sem permissão, caem no início.
 const VIEWS_GESTAO = new Set(['usuarios', 'gerenciar-comunicados', 'novo-comunicado']);
-const VIEWS_ADMIN = new Set(['contas', 'auditoria']);
+const VIEWS_ADMIN = new Set(['contas', 'auditoria', 'paginas']);
 
 function montarCtx() {
   return {
@@ -38,7 +41,13 @@ function montarCtx() {
     view: state.view,
     setores: state.setores,
     perfil: state.perfil,
+    recursos: state.recursos,
     buscaInicial: state.params.busca || '',
+    // páginas criadas/editadas/excluídas: recarrega o menu e a view
+    recarregarRecursos: async () => {
+      state.recursos = await api('/recursos').catch(() => state.recursos);
+      renderShell();
+    },
     navegar,
     sair,
     entrar: () => renderLogin(),
@@ -119,7 +128,13 @@ function renderTopbar(el, ctx) {
 }
 
 function renderView(el, ctx) {
+  // Páginas criadas pela tela: a view é "r:<chave>" e cai na tela genérica.
+  if (state.view.startsWith('r:')) {
+    return renderRecurso(el, ctx, { chave: state.view.slice(2) });
+  }
   switch (state.view) {
+    case 'paginas':
+      return renderPaginas(el, ctx);
     case 'comunicados':
       return renderComunicados(el, ctx, { manage: false });
     case 'gerenciar-comunicados':
@@ -224,6 +239,11 @@ async function boot() {
     state.setores = await api('/setores');
   } catch {
     state.setores = [];
+  }
+  try {
+    state.recursos = await api('/recursos');
+  } catch {
+    state.recursos = [];
   }
   renderShell();
   exigirTrocaSePendente();

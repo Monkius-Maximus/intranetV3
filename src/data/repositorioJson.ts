@@ -8,10 +8,13 @@ import type {
   RepoEventos,
   RepoNavegacao,
   RepoPessoas,
+  RepoRecursos,
+  RepoRegistros,
   RepoTiles,
   RepoUsuarios,
   Repositorio,
 } from './repositorio';
+import type { DadosNovoRecurso, PatchRecurso, Recurso, Registro } from '../domain/recurso';
 import { EmUso, JaExiste, NaoEncontrado } from '../domain/erros';
 import { AUDITORIA_MAXIMO, type RegistroAuditoria } from '../domain/auditoria';
 import type { Anexo, Aviso, DadosNovoAviso, PatchAviso } from '../domain/aviso';
@@ -39,6 +42,8 @@ interface Doc {
   tiles: Tile[];
   eventos: Evento[];
   auditoria: RegistroAuditoria[];
+  recursos: Recurso[];
+  registros: Registro[];
   seq: Record<string, number>;
 }
 
@@ -53,6 +58,8 @@ function docVazio(): Doc {
     tiles: [],
     eventos: [],
     auditoria: [],
+    recursos: [],
+    registros: [],
     seq: {},
   };
 }
@@ -88,6 +95,8 @@ export class RepositorioJson implements Repositorio {
     this.doc.tiles ??= [];
     this.doc.eventos ??= [];
     this.doc.auditoria ??= [];
+    this.doc.recursos ??= [];
+    this.doc.registros ??= [];
     for (const a of this.doc.avisos) a.anexos ??= [];
     // Bancos anteriores ao multi-setor não têm pessoas[].setores: deriva do
     // caminho (SECOGE/NSI -> ['SECOGE','NSI']); depois só normaliza.
@@ -518,5 +527,95 @@ export class RepositorioJson implements Repositorio {
       return normalizarUsuario(u);
     },
     contar: async () => this.doc.usuarios.length,
+  };
+
+  recursos: RepoRecursos = {
+    listar: async () => [...this.doc.recursos].sort((a, b) => a.ordem - b.ordem),
+    porChave: async (chave) => this.doc.recursos.find((r) => r.chave === chave),
+    criar: async (dados: DadosNovoRecurso) => {
+      if (this.doc.recursos.some((r) => r.chave === dados.chave)) {
+        throw new JaExiste('já existe um recurso com esta chave');
+      }
+      const r: Recurso = {
+        id: this.proximoId('recursos'),
+        ordem: this.doc.recursos.length + 1,
+        chave: dados.chave,
+        nome: dados.nome,
+        icone: dados.icone,
+        campos: dados.campos,
+      };
+      this.doc.recursos.push(r);
+      await this.persistir();
+      return r;
+    },
+    atualizar: async (id, patch: PatchRecurso) => {
+      const r = this.doc.recursos.find((x) => x.id === id);
+      if (!r) throw new NaoEncontrado('recurso não encontrado');
+      // A chave nunca muda: é o vínculo com os registros já gravados.
+      Object.assign(r, patch);
+      await this.persistir();
+      return r;
+    },
+    remover: async (id) => {
+      const i = this.doc.recursos.findIndex((x) => x.id === id);
+      if (i < 0) throw new NaoEncontrado('recurso não encontrado');
+      const [r] = this.doc.recursos.splice(i, 1);
+      // Sem a definição os registros ficariam órfãos (invisíveis e sem forma):
+      // some com eles junto — a rota avisa quantos antes de confirmar.
+      const antes = this.doc.registros.length;
+      this.doc.registros = this.doc.registros.filter((x) => x.recurso !== r.chave);
+      await this.persistir();
+      return { recurso: r, registros: antes - this.doc.registros.length };
+    },
+    reordenar: async (ids) => {
+      ids.forEach((id, idx) => {
+        const r = this.doc.recursos.find((x) => x.id === id);
+        if (r) r.ordem = idx + 1;
+      });
+      await this.persistir();
+    },
+    contar: async () => this.doc.recursos.length,
+  };
+
+  registros: RepoRegistros = {
+    listar: async (recurso, busca) => {
+      let itens = this.doc.registros.filter((r) => r.recurso === recurso);
+      if (busca) {
+        const q = normalizar(busca);
+        itens = itens.filter((r) =>
+          Object.values(r.valores).some((v) => v != null && normalizar(String(v)).includes(q)),
+        );
+      }
+      return [...itens].sort((a, b) => b.id - a.id); // mais recentes primeiro
+    },
+    obter: async (id) => this.doc.registros.find((r) => r.id === id),
+    criar: async (recurso, valores) => {
+      const r: Registro = {
+        id: this.proximoId('registros'),
+        recurso,
+        valores: valores as Registro['valores'],
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: null,
+      };
+      this.doc.registros.push(r);
+      await this.persistir();
+      return r;
+    },
+    atualizar: async (id, valores) => {
+      const r = this.doc.registros.find((x) => x.id === id);
+      if (!r) throw new NaoEncontrado('registro não encontrado');
+      r.valores = valores as Registro['valores'];
+      r.atualizadoEm = new Date().toISOString();
+      await this.persistir();
+      return r;
+    },
+    remover: async (id) => {
+      const i = this.doc.registros.findIndex((x) => x.id === id);
+      if (i < 0) throw new NaoEncontrado('registro não encontrado');
+      const [r] = this.doc.registros.splice(i, 1);
+      await this.persistir();
+      return r;
+    },
+    contar: async (recurso) => this.doc.registros.filter((r) => r.recurso === recurso).length,
   };
 }

@@ -4,6 +4,7 @@ import type { DadosNovoSetor, Departamento, PatchSetor } from '../domain/departa
 import type { DadosNovoEvento, Evento, PatchEvento } from '../domain/evento';
 import type { DadosNovoGrupo, DadosNovoItem, GrupoComItens, GrupoMenu, ItemMenu } from '../domain/navegacao';
 import type { DadosNovaPessoa, PatchPessoa, Pessoa } from '../domain/pessoa';
+import type { DadosNovoRecurso, PatchRecurso, Recurso, Registro } from '../domain/recurso';
 import type { DadosNovoTile, PatchTile, Tile } from '../domain/tile';
 import type { Usuario } from '../domain/usuario';
 
@@ -100,6 +101,28 @@ export interface RepoUsuarios {
   contar(): Promise<number>;
 }
 
+// Recursos dirigidos por dados: a DEFINIÇÃO (que campos existem) e os
+// REGISTROS (as linhas). Ver src/domain/recurso.ts.
+export interface RepoRecursos {
+  listar(): Promise<Recurso[]>;
+  porChave(chave: string): Promise<Recurso | undefined>;
+  criar(dados: DadosNovoRecurso): Promise<Recurso>;
+  atualizar(id: number, patch: PatchRecurso): Promise<Recurso>;
+  // Remove a definição e, junto, todos os registros dela (retorna quantos).
+  remover(id: number): Promise<{ recurso: Recurso; registros: number }>;
+  reordenar(ids: number[]): Promise<void>;
+  contar(): Promise<number>;
+}
+
+export interface RepoRegistros {
+  listar(recurso: string, busca?: string): Promise<Registro[]>;
+  obter(id: number): Promise<Registro | undefined>;
+  criar(recurso: string, valores: Record<string, unknown>): Promise<Registro>;
+  atualizar(id: number, valores: Record<string, unknown>): Promise<Registro>;
+  remover(id: number): Promise<Registro>;
+  contar(recurso: string): Promise<number>;
+}
+
 export interface Repositorio {
   iniciar(): Promise<void>;
   pessoas: RepoPessoas;
@@ -110,4 +133,6 @@ export interface Repositorio {
   tiles: RepoTiles;
   eventos: RepoEventos;
   auditoria: RepoAuditoria;
+  recursos: RepoRecursos;
+  registros: RepoRegistros;
 }

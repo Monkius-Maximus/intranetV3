@@ -498,6 +498,94 @@ describe('Setores editáveis', () => {
   });
 });
 
+describe('Recursos dirigidos por dados (CRUD de página)', () => {
+  let recursoId: number;
+
+  it('admin cria a página "Estoque" definindo os campos pela API', async () => {
+    const token = await loginAdmin();
+    const r = await request(app)
+      .post('/api/recursos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        chave: 'estoque',
+        nome: 'Estoque',
+        icone: 'folder_open',
+        campos: [
+          { chave: 'item', rotulo: 'Item', tipo: 'texto', obrigatorio: true },
+          { chave: 'quantidade', rotulo: 'Quantidade', tipo: 'numero', obrigatorio: true },
+          { chave: 'unidade', rotulo: 'Unidade', tipo: 'selecao', opcoes: ['un', 'L'] },
+        ],
+      });
+    expect(r.status).toBe(201);
+    expect(r.body.campos).toHaveLength(3);
+    recursoId = r.body.id;
+
+    // a definição é pública: a interface precisa dela para montar o menu
+    const publico = await request(app).get('/api/recursos');
+    expect(publico.status).toBe(200);
+    expect(publico.body.some((x: { chave: string }) => x.chave === 'estoque')).toBe(true);
+  });
+
+  it('a validação é GERADA da definição: obrigatório, seleção e chave desconhecida', async () => {
+    const token = await loginAdmin();
+    const ok = await request(app)
+      .post('/api/r/estoque')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ item: 'Garrafão de água', quantidade: 3, unidade: 'un' });
+    expect(ok.status).toBe(201);
+    expect(ok.body.valores.quantidade).toBe(3); // número, não string
+
+    const semObrigatorio = await request(app)
+      .post('/api/r/estoque')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantidade: 1 });
+    expect(semObrigatorio.status).toBe(422);
+
+    const selecaoInvalida = await request(app)
+      .post('/api/r/estoque')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ item: 'X', quantidade: 1, unidade: 'galão' });
+    expect(selecaoInvalida.status).toBe(422);
+
+    const campoInventado = await request(app)
+      .post('/api/r/estoque')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ item: 'X', quantidade: 1, inventado: 'oi' });
+    expect(campoInventado.status).toBe(422);
+  });
+
+  it('leitura é pública e traz a definição junto; escrita exige login', async () => {
+    const publico = await request(app).get('/api/r/estoque');
+    expect(publico.status).toBe(200);
+    expect(publico.body.recurso.chave).toBe('estoque');
+    expect(publico.body.registros.length).toBeGreaterThan(0);
+
+    const semToken = await request(app).post('/api/r/estoque').send({ item: 'Y', quantidade: 1 });
+    expect(semToken.status).toBe(401);
+  });
+
+  it('busca encontra pelo conteúdo de qualquer campo', async () => {
+    const r = await request(app).get('/api/r/estoque?busca=garrafão');
+    expect(r.body.registros).toHaveLength(1);
+  });
+
+  it('recurso inexistente é 404 (não 500)', async () => {
+    const r = await request(app).get('/api/r/naoexiste');
+    expect(r.status).toBe(404);
+  });
+
+  it('excluir a página leva os registros junto e some do menu', async () => {
+    const token = await loginAdmin();
+    const del = await request(app).delete(`/api/recursos/${recursoId}`).set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+    expect(del.body.registrosRemovidos).toBeGreaterThan(0);
+
+    const lista = await request(app).get('/api/recursos');
+    expect(lista.body.some((x: { chave: string }) => x.chave === 'estoque')).toBe(false);
+    expect((await request(app).get('/api/r/estoque')).status).toBe(404);
+  });
+});
+
 describe('Eventos (agenda)', () => {
   it('admin cria e edita; leitura pública ordenada por data', async () => {
     const token = await loginAdmin();

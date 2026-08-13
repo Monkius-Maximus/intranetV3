@@ -15,9 +15,15 @@ const ITENS_GESTAO = [
   { key: 'gerenciar-comunicados', label: 'Gerenciar comunicados', icon: 'edit_note' },
 ];
 const ITENS_ADMIN = [
+  { key: 'paginas', label: 'Páginas', icon: 'create_new_folder' },
   { key: 'contas', label: 'Contas de acesso', icon: 'shield_person' },
   { key: 'auditoria', label: 'Auditoria', icon: 'history' },
 ];
+
+// Páginas criadas pela tela (recursos dirigidos por dados) entram no menu como
+// qualquer outra — a lista vem do servidor, não do código.
+const itensDeRecursos = (recursos) =>
+  (recursos || []).map((r) => ({ key: `r:${r.chave}`, label: r.nome, icon: r.icone || 'folder_open' }));
 
 // A view atual pode não ser exatamente a chave do menu (ex.: novo-comunicado
 // destaca "Gerenciar comunicados").
@@ -42,6 +48,7 @@ export function renderSidebar(el, ctx) {
     </div>
     <nav class="sidebar-nav">
       ${ITENS.map(item).join('')}
+      ${itensDeRecursos(ctx.recursos).map(item).join('')}
       ${
         ctx.gestao
           ? `<div class="nav-group-label">${ctx.admin ? 'Administração' : 'Gestão'}</div>${ITENS_GESTAO.map(item).join('')}`
