@@ -48,7 +48,8 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
         }</p>
       </div>
       <div style="display:flex;gap:10px">
-        ${ctx.usuario ? `<button class="btn btn-ghost exportar">${ico('download', { size: 18 })} Exportar</button>` : ''}
+        ${ctx.usuario ? `<button class="btn btn-ghost exportar">${ico('download', { size: 18 })} Excel</button>` : ''}
+        ${ctx.usuario ? `<button class="btn btn-ghost exportar-csv" title="Extração em CSV — abre no Excel e serve de auditoria">${ico('download', { size: 18 })} CSV</button>` : ''}
         ${ctx.admin ? `<button class="btn btn-ghost gerir-setores">${ico('apartment', { size: 18 })} Setores</button>` : ''}
         ${gestao ? `<button class="btn btn-primary novo-pessoa">${ico('add', { size: 18 })} Nova pessoa</button>` : ''}
       </div>
@@ -259,20 +260,25 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
   });
   el.querySelector('.novo-pessoa')?.addEventListener('click', () => abrirDrawer(null));
   el.querySelector('.gerir-setores')?.addEventListener('click', () => abrirSetores());
-  el.querySelector('.exportar')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    const qs = new URLSearchParams();
-    if (estado.busca) qs.set('busca', estado.busca);
-    if (estado.setor) qs.set('setor', estado.setor);
-    btn.disabled = true;
-    try {
-      await baixar(`/pessoas/export.xlsx?${qs.toString()}`, 'servidores-seplag.xlsx');
-    } catch (err) {
-      alert(`Não consegui exportar: ${err.message}`);
-    } finally {
-      btn.disabled = false;
-    }
-  });
+  // Excel (.xlsx, formatado) e CSV (extração crua para auditoria) — os dois
+  // saem da MESMA vista filtrada que está na tela.
+  const exportar = (seletor, caminho, nomePadrao) =>
+    el.querySelector(seletor)?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const qs = new URLSearchParams();
+      if (estado.busca) qs.set('busca', estado.busca);
+      if (estado.setor) qs.set('setor', estado.setor);
+      btn.disabled = true;
+      try {
+        await baixar(`${caminho}?${qs.toString()}`, nomePadrao);
+      } catch (err) {
+        alert(`Não consegui exportar: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  exportar('.exportar', '/pessoas/export.xlsx', 'servidores-seplag.xlsx');
+  exportar('.exportar-csv', '/exportar/pessoas.csv', 'pessoas.csv');
 
   // ------------------------------------------------------- gestão de setores
   // Drawer com a lista (sigla, nome, nº de pessoas), edição inline, exclusão

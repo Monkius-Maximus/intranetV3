@@ -136,7 +136,8 @@ src/
   data/        repositorio.ts (INTERFACE) · repositorioJson.ts · arquivoJson.ts   (troca de origem mora aqui)
   sources/     contrato.ts · xlsxAniversariantes.ts · sqlEmployees.ts   (1 adaptador por origem)
   ingest.ts    merge/upsert — reimportar preserva o enriquecimento (e-mail, cargo, redes…)
-  http/        pessoas · avisos · navegacao · setores · auth · health · app   (1 rota por módulo)
+  http/        pessoas · avisos · navegacao · setores · exportar · auth · health · app   (1 rota por módulo)
+  exportar/    pessoasXlsx.ts (planilha formatada) · csv.ts + conjuntos.ts (extração da base)
   auth.ts · config.ts · seed.ts · index.ts
 public/js/
   core/        api · dom · ui   (cliente HTTP · escape/XSS · ícones, avatares, datas)

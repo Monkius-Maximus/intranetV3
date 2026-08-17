@@ -345,8 +345,10 @@ de porta no rodapé sai da conta.
   **Outros setores** é uma lista de marcação múltipla (segure Ctrl/Cmd) — é
   onde se marca o núcleo, ex.: principal `SECOGE` + outro `NSI`.
 - **Editar/Excluir** pelos ícones de cada linha (excluir pede confirmação).
-- **Exportar**: baixa a planilha `.xlsx` do diretório. Ela respeita a **busca e
-  o filtro** aplicados na tela — filtre por um setor e exporte só ele.
+- **Excel** / **CSV**: baixam o diretório como planilha. Ambos respeitam a
+  **busca e o filtro** aplicados na tela — filtre por um setor e exporte só ele.
+  O `.xlsx` sai formatado, para ler; o `.csv` sai cru, para conferir e cruzar
+  com outra base (ver *Extração da base* abaixo).
 
 ### Setores (botão "Setores" na tela Pessoas)
 
@@ -398,6 +400,33 @@ Cada linha tem três ações: **lápis** (editar), **pessoas** (mover/mesclar) e
 **Administração → Auditoria**: quem entrou e quem criou/editou/excluiu o quê
 (pessoas, comunicados, anexos, setores, tiles, eventos, contas, senhas), com
 data e hora. O sistema guarda as últimas 2.000 ações.
+
+### Extração da base em CSV (auditoria fora da aplicação)
+
+Na mesma tela **Administração → Auditoria**, o painel **Extração da base (CSV)**
+baixa cada conjunto de dados como planilha. É a forma de conferir a base inteira
+por fora — abrir no Excel, ordenar, cruzar com o RH, guardar como evidência.
+
+| Botão | O que sai | Quem pode |
+|---|---|---|
+| Pessoas e ramais | quadro completo: setores, cargo, **ramal**, e-mail, aniversário, situação | qualquer conta |
+| Setores | siglas, nomes, secretaria-mãe e **quantas pessoas** há em cada um | qualquer conta |
+| Contas de acesso | quem tem login, papel e setores geridos (**nunca** senhas) | só admin |
+| Trilha de auditoria | a tabela de ações **inteira**, não só as 200 da tela | só admin |
+| Comunicados | título, categoria, autor, data, anexos e texto | qualquer conta |
+| Agenda | eventos cadastrados | qualquer conta |
+| Links e menus | a navegação do portal, um link por linha | qualquer conta |
+
+**Abre limpo no Excel**: o arquivo sai em UTF-8 **com BOM** (acentos corretos) e
+com **`;`** como separador — o que o Excel em português espera. Quem precisar de
+vírgula acrescenta `?sep=,` na URL (ou `?sep=tab`).
+
+**Cada download fica registrado na própria trilha de auditoria** ("exportou
+base"), com quem baixou, quando e quantas linhas saíram. Uma cópia de dados
+pessoais saiu do sistema; a auditoria precisa saber disso.
+
+> **LGPD**: são despejos de dados pessoais. Guarde-os fora da pasta do projeto
+> (o `.gitignore` **não** ignora `.csv`) e apague quando terminar a conferência.
 
 ---
 
@@ -530,6 +559,8 @@ Leitura é pública; escrita exige token (`Authorization: Bearer …` obtido em
 | `/api/health` | estado + contagens | — | — |
 | `/api/pessoas` | listar/buscar (`?busca=&setor=`) | CRUD nos seus setores | CRUD total |
 | `/api/pessoas/export.xlsx` | — | baixar (exige login) | baixar |
+| `/api/exportar` | — | catálogo dos conjuntos | idem, com os de admin |
+| `/api/exportar/<conjunto>.csv` | — | pessoas, setores, avisos, eventos, links | + contas, auditoria |
 | `/api/avisos` | listar | criar; editar/excluir os próprios | tudo |
 | `/api/avisos/:id/anexos` | download público | nos próprios avisos | tudo |
 | `/api/setores` | listar | — | CRUD (rename cascateia) |
@@ -544,6 +575,10 @@ Leitura é pública; escrita exige token (`Authorization: Bearer …` obtido em
 Tokens expiram em 8 horas. Validação retorna **422** com os campos; permissão
 negada, **403**; conflito (e-mail/sigla duplicada, setor em uso, último admin),
 **409**.
+
+A extração aceita `?sep=,` (ou `tab`) para trocar o separador, e `?busca=&setor=`
+em `pessoas.csv` — os mesmos filtros da tela. Um conjunto inexistente devolve
+**404** com a lista dos que existem.
 
 ---
 

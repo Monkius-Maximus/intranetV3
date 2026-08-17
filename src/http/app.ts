@@ -8,6 +8,7 @@ import { montarAuth } from './auth';
 import { montarAvisos } from './avisos';
 import { montarContas } from './contas';
 import { montarEventos } from './eventos';
+import { montarExportar } from './exportar';
 import { montarTiles } from './tiles';
 import { montarHealth } from './health';
 import { montarNavegacao } from './navegacao';
@@ -34,6 +35,7 @@ export function criarApp(repo: Repositorio): express.Express {
   app.use('/api/tiles', montarTiles(repo));
   app.use('/api/eventos', montarEventos(repo));
   app.use('/api/auditoria', montarAuditoria(repo));
+  app.use('/api/exportar', montarExportar(repo));
 
   app.use((_req, res) => {
     res.status(404).json({ erro: 'recurso não encontrado' });

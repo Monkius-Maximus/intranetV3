@@ -240,6 +240,105 @@ describe('Exportação do diretório em .xlsx', () => {
   });
 });
 
+describe('Extração da base em CSV', () => {
+  // Lê a resposta como texto cru: o que importa aqui é o BOM, o separador e o
+  // escape — coisas que um parse "esperto" esconderia.
+  const baixar = (url: string, token?: string) => {
+    const req = request(app).get(url);
+    if (token) req.set('Authorization', `Bearer ${token}`);
+    return req.buffer(true).parse((res, cb) => {
+      let txt = '';
+      res.on('data', (c: Buffer) => {
+        txt += c.toString('utf8');
+      });
+      res.on('end', () => cb(null, txt));
+    });
+  };
+
+  it('sem token é 401 (é despejo da base)', async () => {
+    const r = await request(app).get('/api/exportar/pessoas.csv');
+    expect(r.status).toBe(401);
+  });
+
+  it('o catálogo lista os conjuntos e some com os de admin para um gestor', async () => {
+    const token = await loginAdmin();
+    const comoAdmin = await request(app).get('/api/exportar').set('Authorization', `Bearer ${token}`);
+    expect(comoAdmin.status).toBe(200);
+    expect(comoAdmin.body.map((c: { nome: string }) => c.nome)).toContain('contas');
+
+    await request(app)
+      .post('/api/contas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Gestor CSV', email: 'gestor.csv@test.local', senha: 'gestor12345', role: 'gestor', setores: ['SEPO'], mustChangePassword: false });
+    const login = await request(app).post('/api/auth/login').send({ email: 'gestor.csv@test.local', senha: 'gestor12345' });
+    const comoGestor = await request(app).get('/api/exportar').set('Authorization', `Bearer ${login.body.token}`);
+    const nomes = comoGestor.body.map((c: { nome: string }) => c.nome);
+    expect(nomes).toContain('pessoas');
+    expect(nomes).not.toContain('contas');
+    expect(nomes).not.toContain('auditoria');
+
+    // E o bloqueio é do servidor, não só da lista: baixar direto também nega.
+    const direto = await request(app).get('/api/exportar/contas.csv').set('Authorization', `Bearer ${login.body.token}`);
+    expect(direto.status).toBe(403);
+  });
+
+  it('pessoas.csv sai com BOM, cabeçalho e respeita o filtro de setor', async () => {
+    const token = await loginAdmin();
+    const r = await baixar('/api/exportar/pessoas.csv?setor=SEPO', token);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toContain('text/csv');
+    expect(r.headers['content-disposition']).toContain('pessoas-');
+
+    const txt = r.body as unknown as string;
+    expect(txt.charCodeAt(0)).toBe(0xfeff); // BOM: o Excel abre os acentos certos
+    const linhas = txt.slice(1).trimEnd().split('\r\n');
+    expect(linhas[0]).toBe(
+      'ID;Nome;Setor principal;Todos os setores;Setor completo;Cargo;Ramal;E-mail;Dia nasc.;Mês nasc.;Status;Competências;Atuação início;Atuação fim;Origem do dado',
+    );
+    const doSetor = await request(app).get('/api/pessoas?setor=SEPO');
+    expect(linhas.length - 1).toBe(doSetor.body.length);
+  });
+
+  it('escapa separador, aspas e quebras de linha, e neutraliza fórmula do Excel', async () => {
+    const token = await loginAdmin();
+    await request(app)
+      .post('/api/pessoas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: '=CMD("x"); Fulano', departmentCode: 'SEPO', cargo: 'Chefe; "o" chefe' });
+
+    const txt = (await baixar('/api/exportar/pessoas.csv?busca=Fulano', token)).body as unknown as string;
+    expect(txt).toContain(`"'=CMD(""x""); Fulano"`); // aspa simples: exibe, não executa
+    expect(txt).toContain('"Chefe; ""o"" chefe"');
+  });
+
+  it('aceita vírgula como separador quando pedido', async () => {
+    const token = await loginAdmin();
+    const txt = (await baixar('/api/exportar/setores.csv?sep=,', token)).body as unknown as string;
+    expect(txt.slice(1).split('\r\n')[0]).toBe('ID,Sigla,Nome,Descrição,Setor-mãe,Pessoas');
+  });
+
+  it('contas.csv nunca leva o hash da senha', async () => {
+    const token = await loginAdmin();
+    const txt = (await baixar('/api/exportar/contas.csv', token)).body as unknown as string;
+    expect(txt).toContain('admin@test.local');
+    expect(txt).not.toContain('$2'); // prefixo do bcrypt
+  });
+
+  it('a própria extração entra na trilha de auditoria', async () => {
+    const token = await loginAdmin();
+    await baixar('/api/exportar/eventos.csv', token);
+    const trilha = await request(app).get('/api/auditoria?limite=5').set('Authorization', `Bearer ${token}`);
+    expect(trilha.body[0]).toMatchObject({ acao: 'exportou', alvo: 'base' });
+  });
+
+  it('conjunto desconhecido é 404 com a lista do que existe', async () => {
+    const token = await loginAdmin();
+    const r = await request(app).get('/api/exportar/inexistente.csv').set('Authorization', `Bearer ${token}`);
+    expect(r.status).toBe(404);
+    expect(r.body.disponiveis).toContain('pessoas');
+  });
+});
+
 describe('Avisos', () => {
   it('admin cria, edita parcialmente (PUT) e o restante é preservado', async () => {
     const token = await loginAdmin();
