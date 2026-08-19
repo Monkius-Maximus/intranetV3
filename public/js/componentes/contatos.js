@@ -374,7 +374,13 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
           row.querySelector('.ok').addEventListener('click', () => {
             const code = row.querySelector('[name=e-code]').value.trim().toUpperCase();
             const name = row.querySelector('[name=e-name]').value.trim();
-            if (!code) return; // nome é opcional (siglas-only); só a sigla é obrigatória
+            // O nome é opcional (siglas-only); a sigla não. Sem sigla, DIZ o
+            // motivo: um salvar que não faz nada e não explica é o pior dos
+            // dois mundos — parece que o sistema perdeu a alteração.
+            if (!code) {
+              alert('A sigla não pode ficar em branco. O nome, sim — deixe vazio para o setor usar só a sigla.');
+              return;
+            }
             acaoAdmin(ctx, async () => {
               await api(`/setores/${s.id}`, { method: 'PUT', body: JSON.stringify({ code, name: name || code }) });
               mudou = true;
@@ -428,7 +434,10 @@ export async function renderPessoas(el, ctx, { manage = false } = {}) {
       ov2.querySelector('.confirmar').addEventListener('click', () => {
         const destino = ov2.querySelector('[name=destino]').value;
         const excluirOrigem = ov2.querySelector('[name=excluir]').checked;
-        if (!destino) return;
+        if (!destino) {
+          alert('Escolha o setor de destino.');
+          return;
+        }
         acaoAdmin(ctx, async () => {
           const r = await api(`/setores/${origem.id}/mover`, {
             method: 'POST',
