@@ -92,10 +92,21 @@ if [ -f /root/.npmrc ]; then
   cp /root/.npmrc /etc/intranet-npmrc && chmod 644 /etc/intranet-npmrc
   NPMRC_ARG=(--userconfig /etc/intranet-npmrc)
 fi
-sudo -u "$USUARIO" env "${ENV_NPM[@]}" bash -c "cd '$DESTINO' && npm ci --omit=dev --no-audit --no-fund ${NPMRC_ARG[*]}" \
-  || erro "npm ci falhou. A VM alcança o registry npm? Atrás de proxy corporativo, exporte
+FALHA_NPM="npm ci falhou. A VM alcança o registry npm? Atrás de proxy corporativo, exporte
        HTTPS_PROXY=… (e NODE_EXTRA_CA_CERTS=/caminho/ca.crt se houver inspeção TLS)
        antes de rodar este script."
+
+sudo -u "$USUARIO" env "${ENV_NPM[@]}" bash -c "cd '$DESTINO' && npm ci --omit=dev --no-audit --no-fund ${NPMRC_ARG[*]}" \
+  || erro "$FALHA_NPM"
+
+# O código de saída do npm NÃO basta: com inspeção TLS no caminho, o npm já foi
+# visto abortar no meio ("Exit handler never called!") e ainda assim sair 0 —
+# o script seguia adiante e reiniciava o serviço com node_modules pela metade,
+# derrubando o site. O binário que o systemd executa é a prova concreta de que
+# a instalação foi até o fim; sem ele, para aqui e o serviço antigo continua.
+[ -x "$DESTINO/node_modules/.bin/tsx" ] || erro "$FALHA_NPM
+       (o npm terminou sem erro, mas node_modules/.bin/tsx não existe —
+        instalação incompleta; o serviço NÃO foi reiniciado.)"
 
 # 4. Variáveis de ambiente -----------------------------------------------------
 # Credenciais do 1º admin: por prompt (interativo) ou por env (automação):
